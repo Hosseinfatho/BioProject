@@ -622,7 +622,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
       
       const boxMaterial = new THREE.LineBasicMaterial({
         color: boxColor,
-        linewidth: 6,
+        linewidth: 16,
         transparent: true,
         opacity: isTemporary ? 0.7 : 0.96
       });
