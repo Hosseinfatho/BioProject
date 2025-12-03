@@ -494,35 +494,60 @@ const Direction_view = ({ channels = [] }) => {
         width: '100%',
         backgroundColor: '#000000',
         border: '1px solid #444',
-        padding: '1px',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
         boxSizing: 'border-box'
       }}
     >
+      {/* Header - Similar to Graph Panel and Local View */}
       <div style={{
-        margin: '8px',
-        flexShrink: 0
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '6px 10px',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+        flexShrink: 0,
+        zIndex: 10
       }}>
         <h3
           style={{
             margin: 0,
             fontSize: '14px',
             color: 'white',
-            fontWeight: 500
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
           }}
         >
-          Direction View
+          {/* Composite Glyph: Compass + Directional arrows */}
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{ filter: 'drop-shadow(0 0 3px rgba(74, 222, 128, 0.5))' }}>
+            {/* Compass circle */}
+            <circle cx="12" cy="12" r="10" stroke="#4ade80" strokeWidth="1.5" fill="rgba(74, 222, 128, 0.1)" />
+            {/* Cardinal direction markers */}
+            <circle cx="12" cy="3" r="1.5" fill="#fff" />
+            <circle cx="21" cy="12" r="1.5" fill="#4ade80" />
+            <circle cx="12" cy="21" r="1.5" fill="#fff" opacity="0.5" />
+            <circle cx="3" cy="12" r="1.5" fill="#4ade80" opacity="0.5" />
+            {/* Direction arrow */}
+            <path d="M12 7L16 12L12 17L8 12Z" fill="#4ade80" stroke="#fff" strokeWidth="1" />
+            <path d="M12 7L12 12" stroke="#fff" strokeWidth="1.5" />
+          </svg>
+          <span style={{ color: '#4ade80' }}>Direction View</span>
         </h3>
-        {/* One-line explanation of arrows */}
+        
+        {/* Info text on the right */}
         <div style={{
-          fontSize: '11px',
-          color: 'rgba(255, 255, 255, 0.6)',
-          marginTop: '4px',
-          fontStyle: 'italic'
+          fontSize: '10px',
+          color: 'rgba(255, 255, 255, 0.5)',
+          fontStyle: 'italic',
+          maxWidth: '180px',
+          textAlign: 'right',
+          lineHeight: '1.3'
         }}>
-          Arrows show principal direction of each channel's high-intensity regions
+          Arrows show principal direction of high-intensity regions
         </div>
       </div>
       <div
@@ -538,14 +563,14 @@ const Direction_view = ({ channels = [] }) => {
         <div
           style={{
             position: 'absolute',
-            top: '8px',
-            left: '8px',
-            background: 'rgba(0, 0, 0, 0.7)',
+            top: '6px',
+            left: '6px',
+            background: 'rgba(0, 0, 0, 0.8)',
             border: '1px solid rgba(255, 255, 255, 0.2)',
             borderRadius: '4px',
-            padding: '6px 10px',
+            padding: '4px 8px',
             color: '#ffffff',
-            fontSize: '12px',
+            fontSize: '11px',
             fontFamily: 'monospace',
             pointerEvents: 'none',
             zIndex: 1000
