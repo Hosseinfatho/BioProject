@@ -469,7 +469,7 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
       padding: '10px',
       display: 'flex',
       flexDirection: 'column',
-      fontSize: '12px',
+      fontSize: '10px',
       boxSizing: 'border-box',
       overflow: 'hidden'
     }}>
@@ -478,7 +478,7 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: '16px',
+        marginBottom: '12px',
         paddingBottom: '12px',
         borderBottom: '1px solid #444'
       }}>
@@ -532,12 +532,12 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
           <div style={{ 
             display: 'flex', 
             alignItems: 'center', 
-            gap: '10px',
-            marginBottom: '16px',
+            gap: '8px',
+            marginBottom: '12px',
             paddingBottom: '12px',
             borderBottom: '1px solid rgba(74, 222, 128, 0.3)'
           }}>
-            <span style={{ fontSize: '24px' }}>📖</span>
+            <span style={{ fontSize: '24px' }}></span>
             <span style={{ 
               fontSize: '18px', 
               fontWeight: '700', 
@@ -554,7 +554,7 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
                 fontSize: '28px', 
                 lineHeight: '1',
                 filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
-              }}>☑️</span>
+              }}></span>
               <div>
                 <div style={{ fontSize: '14px', fontWeight: '600', color: '#fff', marginBottom: '2px' }}>
                   Checkbox
@@ -571,10 +571,10 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
                 fontSize: '28px', 
                 lineHeight: '1',
                 filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
-              }}>🎨</span>
+              }}></span>
               <div>
                 <div style={{ fontSize: '14px', fontWeight: '600', color: '#fff', marginBottom: '2px' }}>
-                  Color Picker <span style={{ fontSize: '11px', color: '#4ade80' }}>(✏️ icon)</span>
+                  Color Picker <span style={{ fontSize: '11px', color: '#4ade80' }}></span>
                 </div>
                 <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.75)', lineHeight: '1.4' }}>
                   Click the square with pencil to change color
@@ -588,7 +588,7 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
                 fontSize: '28px', 
                 lineHeight: '1',
                 filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
-              }}>📊</span>
+              }}></span>
               <div>
                 <div style={{ fontSize: '14px', fontWeight: '600', color: '#fff', marginBottom: '2px' }}>
                   Dropdown
@@ -605,7 +605,7 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
                 fontSize: '28px', 
                 lineHeight: '1',
                 filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
-              }}>🎚️</span>
+              }}></span>
               <div>
                 <div style={{ fontSize: '14px', fontWeight: '600', color: '#fff', marginBottom: '2px' }}>
                   Slider
@@ -622,7 +622,7 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
                 fontSize: '28px', 
                 lineHeight: '1',
                 filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))'
-              }}>✨</span>
+              }}></span>
               <div>
                 <div style={{ fontSize: '14px', fontWeight: '600', color: '#fff', marginBottom: '2px' }}>
                   Apply Filter
