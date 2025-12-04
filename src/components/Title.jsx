@@ -139,7 +139,7 @@ const Title = ({ softwareName = "Software Name (title)" }) => {
               lineHeight: '1.6',
               textAlign: 'justify'
             }}>
-              This project, completed by{' '}
+              This Dashboard, completed by{' '}
               <a
                 href="https://hosseinfatho.github.io/"
                 target="_blank"
@@ -167,7 +167,7 @@ const Title = ({ softwareName = "Software Name (title)" }) => {
                 onMouseEnter={(e) => e.target.style.color = '#1976D2'}
                 onMouseLeave={(e) => e.target.style.color = '#2196F3'}
               >
-                Yugesh Sappidy
+                Yugesh Sappidi
               </a>
               {' '}for the Visual Data Science graduate course at the University of Illinois Chicago (Fall 2025), was developed in collaboration with{' '}
               <a
@@ -184,7 +184,7 @@ const Title = ({ softwareName = "Software Name (title)" }) => {
               >
                 Dr. Lei Duan
               </a>
-              {' '}and Dr. Carl Maki of Rush Medical University. Together, we designed a Microscopy Dashboard to support the investigation of biopsy tissue CyCF microscopic images.
+              {' '}and Dr. Carl Maki of Rush Medical University. Together, we developed a web application that facilitates the analysis of 3D CyCF microscopic images derived from biopsy tissue.
             </div>
           </div>
         </div>
