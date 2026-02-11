@@ -13,16 +13,35 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import s3fs
 import zarr
+SELECTED_DATASET = 2  # Set to 1 or 2 to load that dataset
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Zarr dataset (group root); resolution level "4" -> shape (1, 70, 194, 344, 681)
-DATASET_S3 = "s3://lsp-public-data/biomedvis-challenge-2025/Dataset1-LSP13626-melanoma-in-situ/0"
+# Resolution level "4" -> shape (1, 70, 194, 344, 681)
 RESOLUTION_LEVEL = "4"
 
-# Output: one .npy per channel + channel_set.json
-OUTPUT_DIR = Path(__file__).resolve().parent / "data" / "channels"
+# Dataset configuration (aligned with 00_data.py, 11_download_data.py, metadata.py)
+DATASETS = {
+    1: {
+        "name": "Dataset 1",
+        "s3_url": "s3://lsp-public-data/biomedvis-challenge-2025/Dataset1-LSP13626-melanoma-in-situ/0",
+        "metadata_url": "https://lsp-public-data.s3.amazonaws.com/biomedvis-challenge-2025/Dataset1-LSP13626-melanoma-in-situ/OME/METADATA.ome.xml",
+    },
+    2: {
+        "name": "Dataset 2",
+        "s3_url": "s3://lsp-public-data/biomedvis-challenge-2025/Dataset1-LSP13626-invasive-margin/0",
+        "metadata_url": "https://lsp-public-data.s3.amazonaws.com/biomedvis-challenge-2025/Dataset1-LSP13626-invasive-margin/OME/METADATA.ome.xml",
+    },
+}
+
+BASE_DATA_DIR = Path(__file__).resolve().parent / "data"
+
+
+def get_output_dir(dataset_id: int = None) -> Path:
+    """Return output directory for the given dataset: data/channels_dataset1 or data/channels_dataset2."""
+    did = dataset_id if dataset_id is not None else SELECTED_DATASET
+    return BASE_DATA_DIR / f"channels_dataset{did}"
 
 # Channel names (index 0..69) from OME; microenvironment for each (edit as needed).
 CHANNEL_NAMES = [
@@ -53,11 +72,11 @@ def _microenvironment_for(name: str) -> str:
     return "other"
 
 
-def get_channel_names() -> List[str]:
+def get_channel_names(metadata_url: Optional[str] = None) -> List[str]:
     """Channel names from OME if available, else CHANNEL_NAMES."""
     try:
         from metadata import get_all_channel_names
-        names = get_all_channel_names()
+        names = get_all_channel_names(metadata_url=metadata_url)
         if names:
             return names
     except Exception:
@@ -65,9 +84,9 @@ def get_channel_names() -> List[str]:
     return CHANNEL_NAMES
 
 
-def get_channel_set() -> List[Dict[str, Any]]:
+def get_channel_set(metadata_url: Optional[str] = None) -> List[Dict[str, Any]]:
     """Channel set: list of {channel_index, name, microenvironment}."""
-    names = get_channel_names()
+    names = get_channel_names(metadata_url=metadata_url)
     return [
         {"channel_index": i, "name": name, "microenvironment": _microenvironment_for(name)}
         for i, name in enumerate(names)
@@ -131,10 +150,11 @@ def save_channel_as_npy(
 
 
 def download_all_channels(
-    dataset_url: str = DATASET_S3,
+    dataset_id: Optional[int] = None,
+    dataset_url: Optional[str] = None,
     resolution_level: str = RESOLUTION_LEVEL,
     channel_indices: Optional[List[int]] = None,
-    out_dir: Path = OUTPUT_DIR,
+    out_dir: Optional[Path] = None,
     fs: Optional[s3fs.S3FileSystem] = None,
     name_by_number: bool = True,
 ) -> Tuple[List[Path], List[Dict[str, Any]]]:
@@ -143,23 +163,31 @@ def download_all_channels(
     If name_by_number: files are 0.npy, 1.npy, ... by channel index.
     Returns (list of saved .npy paths, channel_set with name + microenvironment).
     """
-    channel_set = get_channel_set()
+    did = dataset_id if dataset_id is not None else SELECTED_DATASET
+    if did not in DATASETS:
+        raise ValueError(f"dataset_id must be 1 or 2, got: {did}")
+    cfg = DATASETS[did]
+    url = dataset_url or cfg["s3_url"]
+    metadata_url = cfg.get("metadata_url")
+    output_dir = out_dir if out_dir is not None else get_output_dir(did)
+
+    channel_set = get_channel_set(metadata_url=metadata_url)
     if channel_indices is not None:
         channel_set = [c for c in channel_set if c["channel_index"] in channel_indices]
-    out_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
     saved_paths: List[Path] = []
     for rec in channel_set:
         c = rec["channel_index"]
         name = rec["name"]
         logger.info("Loading channel %d: %s", c, name)
-        vol = load_channel_volume(dataset_url, resolution_level, c, fs)
+        vol = load_channel_volume(url, resolution_level, c, fs)
         # vol shape (Z, Y, X); coords 0..Z-1, 0..Y-1, 0..X-1; value v = vol[z,y,x]
-        path = save_channel_as_npy(vol, c, name, out_dir, name_by_number=name_by_number)
+        path = save_channel_as_npy(vol, c, name, output_dir, name_by_number=name_by_number)
         saved_paths.append(path)
         rec["shape"] = list(vol.shape)
         rec["npy_path"] = str(path)
     # Save channel set (name + microenvironment + paths)
-    set_path = out_dir / "channel_set.json"
+    set_path = output_dir / "channel_set.json"
     with open(set_path, "w") as f:
         json.dump(channel_set, f, indent=2)
     logger.info("Saved channel_set to %s", set_path)
@@ -168,11 +196,13 @@ def download_all_channels(
 
 if __name__ == "__main__":
     import sys
-    out = OUTPUT_DIR
+    dataset_id = SELECTED_DATASET
+    out = get_output_dir(dataset_id)
     if len(sys.argv) > 1:
         out = Path(sys.argv[1])
-    paths, channel_set = download_all_channels(out_dir=out)
-    print(f"Saved {len(paths)} channel .npy files to {out}")
+    paths, channel_set = download_all_channels(dataset_id=dataset_id, out_dir=out)
+    dataset_name = DATASETS.get(dataset_id, {}).get("name", f"Dataset {dataset_id}")
+    print(f"{dataset_name}: Saved {len(paths)} channel .npy files to {out}")
     print("Channel set (name, microenvironment):")
     for c in channel_set[:5]:
         print(f"  {c['channel_index']}: {c['name']} -> {c['microenvironment']}")

@@ -4,6 +4,7 @@ Save one .npy as a table where each row is (channel, value, z, y, x).
 Value is read from the normalized (and Z-aggregated) channel at (z, y, x).
 Example: channel 2 at x=600, y=320, z=10 with value 0.2 -> row (2, 0.2, 10, 320, 600).
 Saved array shape: (N, 5) with columns [channel, value, z, y, x]; N = C * Z * Y * X.
+Supports Dataset 1 and Dataset 2.
 """
 
 from __future__ import annotations
@@ -11,18 +12,40 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+SELECTED_DATASET = 2  # Set to 1 or 2 to preprocess that dataset
+
+# Dataset configuration (aligned with 20_load_channels.py, 33_investigate.py, 40_normalizedChannel.py)
+DATASETS = {
+    1: {"name": "Dataset 1"},
+    2: {"name": "Dataset 2"},
+}
 
 BASE_DIR = Path(__file__).resolve().parent
-CHANNEL_SET_PATH = BASE_DIR / "data" / "channels" / "channel_set.json"
-NORMALIZED_DIR = BASE_DIR / "data" / "NormalizedChannel"
-PREPROCESSED_DIR = BASE_DIR / "data" / "preprocessed"
-PREPROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+BASE_DATA_DIR = BASE_DIR / "data"
+
+
+def get_channels_dir(dataset_id: Optional[int] = None) -> Path:
+    """Return channels directory: data/channels_dataset1 or data/channels_dataset2."""
+    did = dataset_id if dataset_id is not None else SELECTED_DATASET
+    return BASE_DATA_DIR / f"channels_dataset{did}"
+
+
+def get_normalized_dir(dataset_id: Optional[int] = None) -> Path:
+    """Return normalized directory: data/NormalizedChannel_dataset1 or NormalizedChannel_dataset2."""
+    did = dataset_id if dataset_id is not None else SELECTED_DATASET
+    return BASE_DATA_DIR / f"NormalizedChannel_dataset{did}"
+
+
+def get_preprocessed_dir(dataset_id: Optional[int] = None) -> Path:
+    """Return preprocessed output directory: data/preprocessed_dataset1 or preprocessed_dataset2."""
+    did = dataset_id if dataset_id is not None else SELECTED_DATASET
+    return BASE_DATA_DIR / f"preprocessed_dataset{did}"
 
 # Same channel/microenvironment config as model.py
 CHANNEL_NAMES: List[str] = ["PMEL", "MART1", "PRAME"]
@@ -30,11 +53,11 @@ MICROENVIRONMENT_NAME: str = "Melanocytic tumor identity"
 # Z aggregation: every this many voxels (along z) are averaged into 1
 Z_AGGREGATE = 16
 
-def get_channel_indices(channel_names: List[str]) -> List[int]:
+def get_channel_indices(channel_names: List[str], channel_set_path: Path) -> List[int]:
     """Resolve channel names to indices using channel_set.json."""
-    if not CHANNEL_SET_PATH.exists():
-        raise FileNotFoundError(f"Channel set not found: {CHANNEL_SET_PATH}")
-    with open(CHANNEL_SET_PATH) as f:
+    if not channel_set_path.exists():
+        raise FileNotFoundError(f"Channel set not found: {channel_set_path}")
+    with open(channel_set_path) as f:
         channel_set = json.load(f)
     name_to_index = {rec["name"]: rec["channel_index"] for rec in channel_set}
     indices = []
@@ -45,11 +68,11 @@ def get_channel_indices(channel_names: List[str]) -> List[int]:
     return indices
 
 
-def load_normalized_channels(channel_indices: List[int]) -> np.ndarray:
+def load_normalized_channels(channel_indices: List[int], normalized_dir: Path) -> np.ndarray:
     """Load normalized .npy for each channel; return (channel, z, y, x) = (C, Z, Y, X)."""
     channels = []
     for i in channel_indices:
-        path = NORMALIZED_DIR / f"{i}.npy"
+        path = normalized_dir / f"{i}.npy"
         if not path.exists():
             raise FileNotFoundError(f"Normalized channel not found: {path}")
         arr = np.load(path).astype(np.float32)
@@ -105,6 +128,7 @@ def get_value_at(data: np.ndarray, channel: int, z: int, y: int, x: int) -> floa
 
 
 def run_preprocess(
+    dataset_id: Optional[int] = None,
     channel_names: List[str] | None = None,
     microenvironment_name: str | None = None,
     z_aggregate: int = Z_AGGREGATE,
@@ -114,9 +138,10 @@ def run_preprocess(
     Load normalized channels (C, Z, Y, X), aggregate Z every z_aggregate voxels.
     Save as .npy: each row = (channel, value, z, y, x); value from normalized channel at (z,y,x).
     """
+    did = dataset_id if dataset_id is not None else SELECTED_DATASET
     channel_names = channel_names or CHANNEL_NAMES
     microenvironment_name = microenvironment_name or MICROENVIRONMENT_NAME
-    output_dir = output_dir if output_dir is not None else PREPROCESSED_DIR
+    output_dir = output_dir if output_dir is not None else get_preprocessed_dir(did)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     if not 1 <= len(channel_names) <= 4:
@@ -125,8 +150,10 @@ def run_preprocess(
     logger.info("Channels: %s", channel_names)
     logger.info("Microenvironment: %s", microenvironment_name)
 
-    indices = get_channel_indices(channel_names)
-    volume = load_normalized_channels(indices)
+    channel_set_path = get_channels_dir(did) / "channel_set.json"
+    normalized_dir = get_normalized_dir(did)
+    indices = get_channel_indices(channel_names, channel_set_path)
+    volume = load_normalized_channels(indices, normalized_dir)
     # volume: (channel, z, y, x) = (C, Z, Y, X)
     C, Z, Y, X = volume.shape
     logger.info("Loaded volume shape (C,Z,Y,X): %s", volume.shape)
@@ -179,15 +206,19 @@ def run_preprocess(
 
 
 if __name__ == "__main__":
+    dataset_id = SELECTED_DATASET
     run_preprocess(
+        dataset_id=dataset_id,
         channel_names=CHANNEL_NAMES,
         microenvironment_name=MICROENVIRONMENT_NAME,
         z_aggregate=Z_AGGREGATE,
-        output_dir=PREPROCESSED_DIR,
     )
     # Example: read value for channel 1 at x=600, y=200, z=10
-    out_path = PREPROCESSED_DIR / (microenvironment_to_filename(MICROENVIRONMENT_NAME) + ".npy")
+    preprocessed_dir = get_preprocessed_dir(dataset_id)
+    out_path = preprocessed_dir / (microenvironment_to_filename(MICROENVIRONMENT_NAME) + ".npy")
+    dataset_name = DATASETS.get(dataset_id, {}).get("name", f"Dataset {dataset_id}")
+    print(f"{dataset_name}: Preprocessed output -> {preprocessed_dir}")
     if out_path.exists():
         data = load_preprocessed_table(out_path)
         value = get_value_at(data, channel=1, z=10, y=100, x=600)
-        print("Example lookup: channel=1, z=10, y=200, x=600 -> value =", value)
+        print("Example lookup: channel=1, z=10, y=100, x=600 -> value =", value)

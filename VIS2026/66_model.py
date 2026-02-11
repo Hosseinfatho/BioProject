@@ -1,6 +1,7 @@
 """
 Pipeline: load preprocessed .npy by microenvironment -> create 16x16x12 subgraphs -> train GAT -> extract positions -> save JSON.
 Dimension convention everywhere: (channel, z, y, x) = (C, Z, Y, X). Preprocessed file shape (C, Z, Y, X).
+Supports Dataset 1 and Dataset 2.
 """
 
 from __future__ import annotations
@@ -23,17 +24,56 @@ from torch_geometric.nn import GATConv, global_add_pool, global_max_pool, global
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+SELECTED_DATASET = 2  # Set to 1 or 2 to run pipeline on that dataset
+
+# ---------------------------------------------------------------------------
+# Dataset configuration (aligned with 55_preprocess.py, 40_normalizedChannel.py)
+# ---------------------------------------------------------------------------
+DATASETS = {
+    1: {"name": "Dataset 1"},
+    2: {"name": "Dataset 2"},
+}
+SELECTED_DATASET = 2  # Set to 1 or 2 to run pipeline on that dataset
 
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent
-CHANNEL_SET_PATH = BASE_DIR / "data" / "channels" / "channel_set.json"
-NORMALIZED_DIR = BASE_DIR / "data" / "NormalizedChannel"
-PREPROCESSED_DIR = BASE_DIR / "data" / "preprocessed"
-OUTPUT_DIR = BASE_DIR / "output"
-SUBGRAPHS_DIR = BASE_DIR / "data" / "subgraphs"
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+BASE_DATA_DIR = BASE_DIR / "data"
+BASE_OUTPUT_DIR = BASE_DIR / "output"
+BASE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def get_channels_dir(dataset_id: Optional[int] = None) -> Path:
+    """Return channels directory: data/channels_dataset1 or data/channels_dataset2."""
+    did = dataset_id if dataset_id is not None else SELECTED_DATASET
+    return BASE_DATA_DIR / f"channels_dataset{did}"
+
+
+def get_normalized_dir(dataset_id: Optional[int] = None) -> Path:
+    """Return normalized directory: data/NormalizedChannel_dataset1 or NormalizedChannel_dataset2."""
+    did = dataset_id if dataset_id is not None else SELECTED_DATASET
+    return BASE_DATA_DIR / f"NormalizedChannel_dataset{did}"
+
+
+def get_preprocessed_dir(dataset_id: Optional[int] = None) -> Path:
+    """Return preprocessed directory: data/preprocessed_dataset1 or preprocessed_dataset2."""
+    did = dataset_id if dataset_id is not None else SELECTED_DATASET
+    return BASE_DATA_DIR / f"preprocessed_dataset{did}"
+
+
+def get_output_dir(dataset_id: Optional[int] = None) -> Path:
+    """Return output directory: output/dataset1 or output/dataset2."""
+    did = dataset_id if dataset_id is not None else SELECTED_DATASET
+    out = BASE_OUTPUT_DIR / f"dataset{did}"
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
+def get_subgraphs_dir(dataset_id: Optional[int] = None) -> Path:
+    """Return subgraphs directory: data/subgraphs_dataset1 or subgraphs_dataset2."""
+    did = dataset_id if dataset_id is not None else SELECTED_DATASET
+    return BASE_DATA_DIR / f"subgraphs_dataset{did}"
 
 # ---------------------------------------------------------------------------
 # Default configuration: 1-4 channel names + microenvironment name
@@ -56,9 +96,9 @@ HIDDEN = 32
 PROJ_DIM = 16
 HEADS = 4
 DROPOUT = 0.1
-TOP_K_POSITIONS = 1000
+TOP_K_POSITIONS = 2000
 # Node-level score: Score_r^(k)(i) = max{ i_ij^(k) }; optionally take top p% of voxels (paper default 5%).
-TOP_PERCENT = 5.0  # top p% by Score_r^(k)(i); used if > 0 to limit output size
+TOP_PERCENT = 100.0  # top p% by Score_r^(k)(i); used if > 0 to limit output size
 
 
 def microenvironment_to_filename(name: str) -> str:
@@ -67,7 +107,7 @@ def microenvironment_to_filename(name: str) -> str:
     return "".join(c for c in s if c.isalnum() or c in "._-") or "preprocessed"
 
 
-def load_preprocessed(microenvironment_name: str, preprocessed_dir: Path = PREPROCESSED_DIR) -> np.ndarray:
+def load_preprocessed(microenvironment_name: str, preprocessed_dir: Path) -> np.ndarray:
     """
     Load preprocessed .npy. File is (N, 5) with columns [channel, value, z, y, x].
     Rebuild volume (C, Z, Y, X) so that volume[c, z, y, x] = value from row (c, value, z, y, x).
@@ -95,11 +135,11 @@ def load_preprocessed(microenvironment_name: str, preprocessed_dir: Path = PREPR
     raise ValueError(f"Unexpected preprocessed shape: {data.shape}")
 
 
-def get_channel_indices(channel_names: List[str]) -> List[int]:
+def get_channel_indices(channel_names: List[str], channel_set_path: Path) -> List[int]:
     """Resolve channel names to indices using channel_set.json."""
-    if not CHANNEL_SET_PATH.exists():
-        raise FileNotFoundError(f"Channel set not found: {CHANNEL_SET_PATH}")
-    with open(CHANNEL_SET_PATH) as f:
+    if not channel_set_path.exists():
+        raise FileNotFoundError(f"Channel set not found: {channel_set_path}")
+    with open(channel_set_path) as f:
         channel_set = json.load(f)
     name_to_index = {rec["name"]: rec["channel_index"] for rec in channel_set}
     indices = []
@@ -110,11 +150,11 @@ def get_channel_indices(channel_names: List[str]) -> List[int]:
     return indices
 
 
-def load_normalized_channels(channel_indices: List[int]) -> np.ndarray:
+def load_normalized_channels(channel_indices: List[int], normalized_dir: Path) -> np.ndarray:
     """Load normalized .npy for each channel index; return (channel, z, y, x) = (C, Z, Y, X)."""
     channels = []
     for i in channel_indices:
-        path = NORMALIZED_DIR / f"{i}.npy"
+        path = normalized_dir / f"{i}.npy"
         if not path.exists():
             raise FileNotFoundError(f"Normalized channel not found: {path}")
         arr = np.load(path)
@@ -582,19 +622,24 @@ def compute_interaction_scores(
 
 
 def run_pipeline(
+    dataset_id: Optional[int] = None,
     channel_names: Optional[List[str]] = None,
     microenvironment_name: Optional[str] = None,
-    output_dir: Path = OUTPUT_DIR,
-    preprocessed_dir: Path = PREPROCESSED_DIR,
+    output_dir: Optional[Path] = None,
+    preprocessed_dir: Optional[Path] = None,
 ) -> str:
     """
     Full pipeline (paper ConGAT): load preprocessed -> composite-voxel spatial graph (nodes = composite voxels,
     edges within radius r, w_ij=1/(dist+1)) -> train ConGAT on ego subgraphs -> interaction scoring -> save JSON.
     """
+    did = dataset_id if dataset_id is not None else SELECTED_DATASET
     microenvironment_name = microenvironment_name or MICROENVIRONMENT_NAME
     channel_names = channel_names or CHANNEL_NAMES
+    preprocessed_dir = preprocessed_dir or get_preprocessed_dir(did)
+    output_dir = output_dir or get_output_dir(did)
+    subgraphs_base = get_subgraphs_dir(did)
 
-    logger.info("Microenvironment: %s", microenvironment_name)
+    logger.info("Dataset %d: Microenvironment: %s", did, microenvironment_name)
     steps = ["Load volume", "Create subgraphs", "Build graph", "Ego subgraphs", "Training", "Scoring", "Save JSON"]
     with tqdm(total=len(steps), desc="Pipeline", unit="step", position=0) as pbar:
         pbar.set_description("1/7 Load volume")
@@ -604,7 +649,7 @@ def run_pipeline(
 
         pbar.set_description("2/7 Create subgraphs")
         C, Z, Y, X = volume.shape
-        subgraphs_save_dir = SUBGRAPHS_DIR / microenvironment_to_filename(microenvironment_name)
+        subgraphs_save_dir = subgraphs_base / microenvironment_to_filename(microenvironment_name)
         _, _ = create_subgraphs_3d(
             volume, patch_z=PATCH_Z, patch_y=PATCH_Y, patch_x=PATCH_X, save_dir=subgraphs_save_dir
         )
@@ -660,7 +705,7 @@ def run_pipeline(
         "positions": positions,
     }
     safe_name = microenvironment_name.replace(" ", "_").replace("/", "_")[:64]
-    out_path = output_dir / f"positions_{safe_name}.json"
+    out_path = Path(output_dir) / f"positions_{safe_name}.json"
     with open(out_path, "w") as f:
         json.dump(out_data, f, indent=2)
     logger.info("Saved %d positions to %s", len(positions), out_path)
@@ -668,4 +713,7 @@ def run_pipeline(
 
 
 if __name__ == "__main__":
-    run_pipeline(microenvironment_name=MICROENVIRONMENT_NAME)
+    dataset_id = SELECTED_DATASET
+    out_path = run_pipeline(dataset_id=dataset_id, microenvironment_name=MICROENVIRONMENT_NAME)
+    dataset_name = DATASETS.get(dataset_id, {}).get("name", f"Dataset {dataset_id}")
+    print(f"{dataset_name}: Pipeline complete. Output: {out_path}")

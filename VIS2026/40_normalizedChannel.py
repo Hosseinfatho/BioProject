@@ -1,9 +1,10 @@
 """
 Read each channel .npy, normalize to [0, 1] using 5th–90th percentiles (90th -> 1),
-set values below 5% of max to 0 (noise filter), save to data/NormalizedChannel.
+set values below 5% of max to 0 (noise filter), save to data/NormalizedChannel_dataset1 or NormalizedChannel_dataset2.
 
 Dimension convention everywhere: (channel, z, y, x) = (C, Z, Y, X).
 Here each saved file is one channel: shape (Z, Y, X). Stacking all gives (C, Z, Y, X).
+Supports Dataset 1 and Dataset 2.
 """
 
 from __future__ import annotations
@@ -17,11 +18,34 @@ import numpy as np
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+SELECTED_DATASET = 2  # Set to 1 or 2 to normalize that dataset
 
-CHANNELS_DIR = Path(__file__).resolve().parent / "data" / "channels"
-NORMALIZED_DIR = Path(__file__).resolve().parent / "data" / "NormalizedChannel"
-CHANNEL_MIN_MAX_PATH = Path(__file__).resolve().parent / "output" / "channel_min_max.json"
-CHANNEL_INVESTIGATION_PATH = CHANNELS_DIR / "channel_investigation.json"
+# Dataset configuration (aligned with 20_load_channels.py, 33_investigate.py)
+DATASETS = {
+    1: {"name": "Dataset 1"},
+    2: {"name": "Dataset 2"},
+}
+
+BASE_DATA_DIR = Path(__file__).resolve().parent / "data"
+BASE_OUTPUT_DIR = Path(__file__).resolve().parent / "output"
+
+
+def get_channels_dir(dataset_id: Optional[int] = None) -> Path:
+    """Return channels directory: data/channels_dataset1 or data/channels_dataset2."""
+    did = dataset_id if dataset_id is not None else SELECTED_DATASET
+    return BASE_DATA_DIR / f"channels_dataset{did}"
+
+
+def get_normalized_dir(dataset_id: Optional[int] = None) -> Path:
+    """Return normalized output directory: data/NormalizedChannel_dataset1 or NormalizedChannel_dataset2."""
+    did = dataset_id if dataset_id is not None else SELECTED_DATASET
+    return BASE_DATA_DIR / f"NormalizedChannel_dataset{did}"
+
+
+def get_channel_min_max_path(dataset_id: Optional[int] = None) -> Path:
+    """Return channel_min_max.json path: output/dataset1/channel_min_max.json or output/dataset2/..."""
+    did = dataset_id if dataset_id is not None else SELECTED_DATASET
+    return BASE_OUTPUT_DIR / f"dataset{did}" / "channel_min_max.json"
 
 # Percentile-based normalization: scale so 90th percentile -> 1; values below 5% of max -> 0 (noise)
 PERCENTILE_LOW = 5
@@ -30,8 +54,8 @@ NOISE_THRESHOLD = 0.05  # normalized values below this (5% of max) set to 0
 
 
 def load_min_max_per_channel(
-    min_max_path: Path = CHANNEL_MIN_MAX_PATH,
-    fallback_path: Path = CHANNEL_INVESTIGATION_PATH,
+    min_max_path: Path,
+    fallback_path: Path,
 ) -> List[Tuple[Optional[float], Optional[float]]]:
     """
     Load min/max for each channel (by index). Returns list of (min, max) for channel 0, 1, ...
@@ -57,7 +81,7 @@ def load_min_max_per_channel(
 
 
 def load_channel_metadata(
-    min_max_path: Path = CHANNEL_MIN_MAX_PATH,
+    min_max_path: Path,
 ) -> List[Tuple[Optional[float], Optional[float], str]]:
     """
     Load min, max, and name for each channel. Returns list of (min, max, name).
@@ -122,9 +146,10 @@ def normalize_channel_percentile(
 
 
 def normalize_and_save_all(
-    channels_dir: Path = CHANNELS_DIR,
-    normalized_dir: Path = NORMALIZED_DIR,
-    min_max_path: Path = CHANNEL_MIN_MAX_PATH,
+    dataset_id: Optional[int] = None,
+    channels_dir: Optional[Path] = None,
+    normalized_dir: Optional[Path] = None,
+    min_max_path: Optional[Path] = None,
 ) -> List[Path]:
     """
     Read each channel .npy, normalize to [0,1] using 5th–90th percentiles (90th -> 1),
@@ -132,12 +157,18 @@ def normalize_and_save_all(
     Print each channel's max and mean after normalization.
     Returns list of saved paths.
     """
+    did = dataset_id if dataset_id is not None else SELECTED_DATASET
+    channels_dir = channels_dir or get_channels_dir(did)
+    normalized_dir = normalized_dir or get_normalized_dir(did)
+    min_max_path = min_max_path or get_channel_min_max_path(did)
+    fallback_path = channels_dir / "channel_investigation.json"
+
     meta = load_channel_metadata(min_max_path)
     if not meta:
-        min_max_list = load_min_max_per_channel(min_max_path)
+        min_max_list = load_min_max_per_channel(min_max_path, fallback_path)
         if not min_max_list:
             raise FileNotFoundError(
-                f"No channel min/max found. Run investigate.py first to create {CHANNEL_MIN_MAX_PATH}"
+                f"No channel min/max found. Run 3_investigate.py first to create {min_max_path}"
             )
         meta = [(mn, mx, f"channel_{i}") for i, (mn, mx) in enumerate(min_max_list)]
     normalized_dir.mkdir(parents=True, exist_ok=True)
@@ -173,5 +204,8 @@ def normalize_and_save_all(
 
 
 if __name__ == "__main__":
-    paths = normalize_and_save_all()
-    print(f"Normalized {len(paths)} channels -> {NORMALIZED_DIR}")
+    dataset_id = SELECTED_DATASET
+    paths = normalize_and_save_all(dataset_id=dataset_id)
+    dataset_name = DATASETS.get(dataset_id, {}).get("name", f"Dataset {dataset_id}")
+    normalized_dir = get_normalized_dir(dataset_id)
+    print(f"{dataset_name}: Normalized {len(paths)} channels -> {normalized_dir}")
