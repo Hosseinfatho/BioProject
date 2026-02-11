@@ -70,7 +70,7 @@
     "max": null
   },
   {
-    "name": "lamin-ABC",
+    "name": "lamin ABC",
     "min": null,
     "max": null
   },
@@ -225,7 +225,7 @@
     "max": null
   },
   {
-    "name": "LysozymeC",
+    "name": "lysozyme C",
     "min": null,
     "max": null
   },
@@ -270,7 +270,7 @@
     "max": null
   },
   {
-    "name": "Mast cell tryptase",
+    "name": "mast cell tryptase",
     "min": null,
     "max": null
   },
@@ -320,12 +320,12 @@
     "max": null
   },
   {
-    "name": "Neurofilament L (do not use)",
+    "name": "Neurofilament L",
     "min": null,
     "max": null
   },
   {
-    "name": "GranzymeB",
+    "name": "Granzyme B",
     "min": null,
     "max": null
   },
@@ -341,11 +341,6 @@
   },
   {
     "name": "H3K27me3",
-    "min": null,
-    "max": null
-  },
-  {
-    "name": "Collagen (SHG)",
     "min": null,
     "max": null
   }

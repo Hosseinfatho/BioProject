@@ -1,6 +1,6 @@
 """
 Read OME metadata from S3 or HTTP: channel names, intensity range, and image dimensions.
-Dataset: s3://lsp-public-data/biomedvis-challenge-2025/Dataset1-LSP13626-melanoma-in-situ/0
+Supports Dataset 1 (melanoma-in-situ) and Dataset 2 (invasive-margin).
 """
 
 from __future__ import annotations
@@ -13,14 +13,33 @@ import requests
 import s3fs
 import ome_types
 
+SELECTED_DATASET = 2  # Set to 1 or 2 to use that dataset
 
-# Default dataset (Zarr group root)
-DATASET_S3 = "s3://lsp-public-data/biomedvis-challenge-2025/Dataset1-LSP13626-melanoma-in-situ/0"
+# Dataset configuration (aligned with 00_data.py and 11_download_data.py)
+DATASETS = {
+    1: {
+        "name": "Dataset 1",
+        "s3_url": "s3://lsp-public-data/biomedvis-challenge-2025/Dataset1-LSP13626-melanoma-in-situ/0",
+        "metadata_url": "https://lsp-public-data.s3.amazonaws.com/biomedvis-challenge-2025/Dataset1-LSP13626-melanoma-in-situ/OME/METADATA.ome.xml",
+    },
+    2: {
+        "name": "Dataset 2",
+        "s3_url": "s3://lsp-public-data/biomedvis-challenge-2025/Dataset1-LSP13626-invasive-margin/0",
+        "metadata_url": "https://lsp-public-data.s3.amazonaws.com/biomedvis-challenge-2025/Dataset1-LSP13626-invasive-margin/OME/METADATA.ome.xml",
+    },
+}
 
-# OME metadata URL for this dataset.
-METADATA_HTTP_URL: Optional[str] = (
-    "https://lsp-public-data.s3.amazonaws.com/biomedvis-challenge-2025/Dataset1-LSP13626-melanoma-in-situ/OME/METADATA.ome.xml"
-)
+
+def get_selected_dataset_config() -> tuple[int, str, str, Optional[str]]:
+    """Return (dataset_id, dataset_name, s3_url, metadata_url) for the selected dataset."""
+    if SELECTED_DATASET not in DATASETS:
+        raise ValueError(f"SELECTED_DATASET must be 1 or 2, got: {SELECTED_DATASET}")
+    cfg = DATASETS[SELECTED_DATASET]
+    return SELECTED_DATASET, cfg["name"], cfg["s3_url"], cfg.get("metadata_url")
+
+
+# Default dataset URLs (from selected dataset; used as defaults in functions below)
+_dataset_id, _dataset_name, DATASET_S3, METADATA_HTTP_URL = get_selected_dataset_config()
 
 
 def get_all_channel_names(metadata_url: Optional[str] = None) -> List[str]:
@@ -346,16 +365,19 @@ if __name__ == "__main__":
     import logging
     logging.basicConfig(level=logging.INFO)
 
-    dataset_url = DATASET_S3
-    out_dir = Path(__file__).resolve().parent / "output"
+    dataset_id, dataset_name, dataset_url, _ = get_selected_dataset_config()
+    out_dir = Path(__file__).resolve().parent / "output" / f"dataset{dataset_id}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1) Metadata once (channel names + min/max inside meta["channels"])
-    meta = read_metadata(dataset_url=dataset_url)
-    channel_min_max = get_channel_min_max(dataset_url=dataset_url)
+    # 1) Metadata (channel names + min/max inside meta["channels"])
+    meta = read_metadata(dataset_url=dataset_url, metadata_url=METADATA_HTTP_URL)
+    meta["dataset_id"] = dataset_id
+    meta["dataset_name"] = dataset_name
+    channel_min_max = get_channel_min_max(dataset_url=dataset_url, metadata_url=METADATA_HTTP_URL)
 
-    # 2) Print each section once
-    print("Dataset:", dataset_url)
+    # 2) Print with dataset distinction
+    print(f"=== {dataset_name} ===")
+    print(f"Dataset URL: {dataset_url}")
     print("\nChannel names:")
     for i, name in enumerate(meta["channel_names"]):
         print(f"  {i}: {name}")
@@ -364,7 +386,7 @@ if __name__ == "__main__":
     for c in channel_min_max:
         print(f"  {c['name']}: min={c.get('min')}, max={c.get('max')}")
 
-    # 3) Save once
+    # 3) Save to dataset-specific folder
     with open(out_dir / "metadata.json", "w") as f:
         json.dump(meta, f, indent=2, default=str)
     with open(out_dir / "channel_min_max.json", "w") as f:
