@@ -24,7 +24,7 @@ from torch_geometric.nn import GATConv, global_add_pool, global_max_pool, global
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-SELECTED_DATASET = 2  # Set to 1 or 2 to run pipeline on that dataset
+SELECTED_DATASET = 1  # Set to 1 or 2 to run pipeline on that dataset
 
 # ---------------------------------------------------------------------------
 # Dataset configuration (aligned with 55_preprocess.py, 40_normalizedChannel.py)
@@ -33,7 +33,6 @@ DATASETS = {
     1: {"name": "Dataset 1"},
     2: {"name": "Dataset 2"},
 }
-SELECTED_DATASET = 2  # Set to 1 or 2 to run pipeline on that dataset
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -615,8 +614,9 @@ def compute_interaction_scores(
         results.append({
             "id": rank,
             "x": int(ix * coord_scale), "y": int(iy * coord_scale), "z": int(iz * coord_scale),
-            "score": round(float(node_scores[idx]), 6),  # Score_r^(k)(i)
-            "saliency": round(float(s[idx]), 6),         # s_i^(k)
+            "intensity": round(float(avg_term[idx]), 6),   # (Ibar)^(1/4)
+            "proximity": round(float(s[idx]), 6),          # saliency s_i^(k)
+            "score": round(float(node_scores[idx]), 6),    # Score_r^(k)(i)
         })
     return results
 

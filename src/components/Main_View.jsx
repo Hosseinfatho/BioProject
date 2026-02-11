@@ -76,7 +76,10 @@ const getConfigSignature = (config) =>
     config.opacity ?? ''
   ].join('|');
 
-const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initialSelectionBounds, selectedRegionsData = [] }) => {
+// Position space in ROI JSON uses grid index × 16; same as 60_model.py coord_scale
+const ROI_POSITION_SCALE = 16;
+
+const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initialSelectionBounds, selectedRegionsData = [], roiBoxes = null }) => {
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
@@ -96,6 +99,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
   const cuboidRef = useRef(null);
   const cuboidWireframeRef = useRef(null);
   const cuboidWireframesRef = useRef([]); // Array to store multiple selection boxes
+  const roiWireframesRef = useRef([]); // ROI cubes from positions JSON (not selection)
   const wireframeRegionMapRef = useRef(new Map()); // Map wireframe to regionId
   const isSelectingRef = useRef(false);
   const selectionEndRef = useRef(null);
@@ -419,10 +423,23 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
           console.error('Main_View: Error removing temporary wireframe:', err);
         }
       }
+      // Remove ROI wireframes
+      roiWireframesRef.current.forEach((wireframe) => {
+        if (wireframe && scene.children.includes(wireframe)) {
+          try {
+            scene.remove(wireframe);
+            if (wireframe.geometry) wireframe.geometry.dispose();
+            if (wireframe.material) wireframe.material.dispose();
+          } catch (err) {
+            console.error('Main_View: Error removing ROI wireframe:', err);
+          }
+        }
+      });
     }
     
     // Clear all references
     cuboidWireframesRef.current = [];
+    roiWireframesRef.current = [];
     cuboidWireframeRef.current = null;
     cuboidRef.current = null;
     wireframeRegionMapRef.current.clear();
@@ -580,6 +597,42 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     };
   };
 
+  // Convert ROI box (center in position space, size, volumeShape [C,Z,Y,X]) to world bounds
+  // Uses same scaling as scene: volumeShape [C,Z,Y,X] -> xSize=X, ySize=Y, zSize=Z
+  const roiBoxToWorldBounds = useCallback((roiBox) => {
+    if (!roiBox?.center || roiBox.size == null || !Array.isArray(roiBox.volumeShape) || roiBox.volumeShape.length < 4) return null;
+    const [c, zSize, ySize, xSize] = roiBox.volumeShape;
+    const maxDim = Math.max(xSize, ySize, zSize);
+    const scaleX = xSize / maxDim;
+    const scaleY = ySize / maxDim;
+    const scaleZ = (zSize / maxDim) / 4;
+    const half = (roiBox.size || 200) / 2;
+    const pos = roiBox.center;
+    const vx = pos.x / ROI_POSITION_SCALE;
+    const vy = pos.y / ROI_POSITION_SCALE;
+    const vz = pos.z / ROI_POSITION_SCALE;
+    const halfV = half / ROI_POSITION_SCALE;
+    const vMinX = Math.max(0, vx - halfV);
+    const vMaxX = Math.min(xSize - 1, vx + halfV);
+    const vMinY = Math.max(0, vy - halfV);
+    const vMaxY = Math.min(ySize - 1, vy + halfV);
+    const vMinZ = Math.max(0, vz - halfV);
+    const vMaxZ = Math.min(zSize - 1, vz + halfV);
+    const toWorld = (v, size, scale) => ((v / size) * 2 - 1) * scale;
+    const minX = toWorld(vMinX, xSize, scaleX);
+    const maxX = toWorld(vMaxX, xSize, scaleX);
+    const minY = toWorld(vMinY, ySize, scaleY);
+    const maxY = toWorld(vMaxY, ySize, scaleY);
+    const minZ = toWorld(vMinZ, zSize, scaleZ);
+    const maxZ = toWorld(vMaxZ, zSize, scaleZ);
+    return {
+      min: new THREE.Vector3(minX, minY, minZ),
+      max: new THREE.Vector3(maxX, maxY, maxZ),
+      center: new THREE.Vector3((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2),
+      size: new THREE.Vector3(maxX - minX, maxY - minY, maxZ - minZ)
+    };
+  }, []);
+
   // Create or update 3D cuboid wireframe in scene - adds new box to array
   const updateCuboidWireframe = (worldBounds, isTemporary = false) => {
     try {
@@ -687,6 +740,52 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
       console.error('Main_View: worldBounds:', worldBounds);
     }
   };
+
+  // Add a single ROI rectangle (flat in XY plane) from positions JSON; stored in roiWireframesRef
+  const addRoiWireframe = useCallback((worldBounds) => {
+    if (!sceneRef.current || !worldBounds?.center || !worldBounds?.size) return;
+    const size = worldBounds.size;
+    const center = worldBounds.center;
+    const minSize = 0.001;
+    const safeSizeX = Math.max(minSize, Math.abs(size.x));
+    const safeSizeY = Math.max(minSize, Math.abs(size.y));
+    const planeGeometry = new THREE.PlaneGeometry(safeSizeX, safeSizeY);
+    const rectEdges = new THREE.EdgesGeometry(planeGeometry);
+    const roiColorHex = '#00ff88';
+    const lineColor = parseInt(roiColorHex.replace('#', ''), 16);
+    const lineMaterial = new THREE.LineBasicMaterial({
+      color: lineColor,
+      linewidth: 6,
+      transparent: true,
+      opacity: 0.96
+    });
+    const wireframe = new THREE.LineSegments(rectEdges, lineMaterial);
+    wireframe.renderOrder = 100;
+    wireframe.position.copy(center);
+    wireframe.userData.isRoiBox = true;
+    wireframe.userData.worldBounds = worldBounds;
+    sceneRef.current.add(wireframe);
+    roiWireframesRef.current.push(wireframe);
+    planeGeometry.dispose();
+  }, []);
+
+  // Sync ROI boxes from props: when roiBoxes (array) is set, convert each to world and add wireframes; when null, remove all
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const scene = sceneRef.current;
+    const roiWireframes = roiWireframesRef.current;
+    while (roiWireframes.length) {
+      const w = roiWireframes.pop();
+      if (scene.children.includes(w)) scene.remove(w);
+      if (w.geometry) w.geometry.dispose();
+      if (w.material) w.material.dispose();
+    }
+    const list = Array.isArray(roiBoxes) ? roiBoxes : roiBoxes ? [roiBoxes] : [];
+    list.forEach((roiBox) => {
+      const worldBounds = roiBoxToWorldBounds(roiBox);
+      if (worldBounds) addRoiWireframe(worldBounds);
+    });
+  }, [roiBoxes, roiBoxToWorldBounds, addRoiWireframe]);
 
   // Extract selected region data from all visible channels using 3D cuboid bounds
   const extractSelectedRegion = useCallback(async (worldBounds) => {
@@ -1363,6 +1462,20 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
         }
       });
       cuboidWireframesRef.current = [];
+      roiWireframesRef.current.forEach((wireframe) => {
+        if (wireframe && sceneRef.current) {
+          try {
+            if (sceneRef.current.children.includes(wireframe)) {
+              sceneRef.current.remove(wireframe);
+            }
+            if (wireframe.geometry) wireframe.geometry.dispose();
+            if (wireframe.material) wireframe.material.dispose();
+          } catch (err) {
+            console.error('Main_View: Error disposing ROI wireframe:', err);
+          }
+        }
+      });
+      roiWireframesRef.current = [];
 
       if (msaaRenderTargetRef.current) {
         msaaRenderTargetRef.current.dispose();
