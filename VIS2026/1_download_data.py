@@ -8,6 +8,7 @@ from typing import Tuple
 
 import dask.array as da
 from dask.diagnostics import ProgressBar
+SELECTED_DATASET = 1  # Set to 1 or 2 to download that dataset
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -25,18 +26,36 @@ class VolumeConfig:
     base_sx: float
     base_sy: float
     base_sz: float
+    dataset_id: int = 1  # 1 or 2, for metadata and output distinction
 
 
 # Data is stored in VIS2026/data (same folder as this script)
-DATA_DIR = Path(__file__).resolve().parent / "data"
+BASE_DATA_DIR = Path(__file__).resolve().parent / "data"
+
+# Dataset configuration (aligned with 0_data.py)
+DATASETS = {
+    1: {
+        "name": "Dataset 1",
+        "url": "https://lsp-public-data.s3.amazonaws.com/biomedvis-challenge-2025/Dataset1-LSP13626-melanoma-in-situ/0",
+    },
+    2: {
+        "name": "Dataset 2",
+        "url": "https://lsp-public-data.s3.amazonaws.com/biomedvis-challenge-2025/Dataset1-LSP13626-invasive-margin/0",
+    },
+}
 
 
-def default_config() -> VolumeConfig:
+def default_config(dataset_id: int = None) -> VolumeConfig:
+    """Build config for the selected dataset. Output goes to data/dataset1/ or data/dataset2/."""
+    did = dataset_id if dataset_id is not None else SELECTED_DATASET
+    if did not in DATASETS:
+        raise ValueError(f"dataset_id must be 1 or 2, got: {did}")
+    cfg = DATASETS[did]
     project_root = Path(__file__).resolve().parents[2]
-    data_dir = DATA_DIR
+    data_dir = BASE_DATA_DIR / f"dataset{did}"
     return VolumeConfig(
         source="zarr_s3",
-        zarr_url="https://lsp-public-data.s3.amazonaws.com/biomedvis-challenge-2025/Dataset1-LSP13626-melanoma-in-situ/0",
+        zarr_url=cfg["url"],
         zarr_component=4,
         project_root=project_root,
         data_dir=data_dir,
@@ -44,6 +63,7 @@ def default_config() -> VolumeConfig:
         base_sx=0.14,
         base_sy=0.14,
         base_sz=0.28,
+        dataset_id=did,
     )
 
 
@@ -160,7 +180,10 @@ def download_channels(config: VolumeConfig):
         channel_names = [f"channel_{i}" for i in config.channels]
         save_as_zarr(selected_channels, zarr_path, channel_names, chunks)
 
+        dataset_name = DATASETS.get(config.dataset_id, {}).get("name", f"Dataset {config.dataset_id}")
         metadata = {
+            "dataset_id": config.dataset_id,
+            "dataset_name": dataset_name,
             "shape": selected_channels.shape,
             "dtype": str(selected_channels.dtype),
             "channel_indices": channel_indices,
@@ -185,9 +208,10 @@ def download_channels(config: VolumeConfig):
 
 if __name__ == "__main__":
     config = default_config()
-    logger.info("Starting channel download...")
+    dataset_name = DATASETS.get(config.dataset_id, {}).get("name", f"Dataset {config.dataset_id}")
+    logger.info("Starting channel download for %s...", dataset_name)
     success = download_channels(config)
     if success:
-        logger.info(" Channel download completed successfully")
+        logger.info("%s download completed. Output: %s", dataset_name, config.data_dir)
     else:
-        logger.error(" Channel download failed") 
+        logger.error("%s download failed", dataset_name) 

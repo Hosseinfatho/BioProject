@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 import warnings
+SELECTED_DATASET = 1
 
 warnings.filterwarnings("ignore", category=ResourceWarning)
 logging.getLogger("aiohttp").setLevel(logging.CRITICAL)
@@ -255,21 +256,49 @@ def get_channel_index(channel_name: str, channel_list: List[str]) -> int:
     except ValueError:
         return -1
 
+# =============================================================================
+# Dataset Configuration
+# Add your data and metadata links here. Use SELECTED_DATASET to choose which one to run.
+# =============================================================================
+
+DATASETS = {
+    1: {
+        "name": "Dataset 1",
+        "url": "s3://lsp-public-data/biomedvis-challenge-2025/Dataset1-LSP13626-melanoma-in-situ/0",
+        # metadata_url: optional, if metadata is at a different location
+    },
+    2: {
+        "name": "Dataset 2",
+        "url": "s3://lsp-public-data/biomedvis-challenge-2025/Dataset1-LSP13626-invasive-margin/0",
+        # metadata: OME/METADATA.ome.xml is at same base path
+    },
+}
+
+# Select which dataset to use: 1 or 2
+
+
+def get_selected_dataset_config() -> Tuple[int, str, str]:
+    """Return (dataset_id, dataset_name, url) for the selected dataset."""
+    if SELECTED_DATASET not in DATASETS:
+        raise ValueError(f"SELECTED_DATASET must be 1 or 2, got: {SELECTED_DATASET}")
+    cfg = DATASETS[SELECTED_DATASET]
+    return SELECTED_DATASET, cfg["name"], cfg["url"]
+
+
 if __name__ == "__main__":
-    # Example usage
-    url = "s3://lsp-public-data/biomedvis-challenge-2025/Dataset1-LSP13626-melanoma-in-situ/0"
-    # url = "D:/Research/vis2025/BestCameraPosition/backend/Input/default_channels_20250521_095553.zarr"
+    dataset_id, dataset_name, url = get_selected_dataset_config()
 
     def _run(fs):
+        print(f"=== {dataset_name} ===")
         print("Analyzing Zarr structure...")
         structure = analyze_zarr_structure(url, fs=fs)
-        print("\nDetailed structure:")
+        print(f"\n--- {dataset_name} - Detailed structure ---")
         print(json.dumps(structure, indent=2))
-        print("\nTree representation:")
+        print(f"\n--- {dataset_name} - Tree representation ---")
         print_zarr_tree(url, fs=fs)
 
     if url.startswith("s3://"):
         fs = get_s3fs()
         _run(fs)
     else:
-        _run(None) 
+        _run(None)
