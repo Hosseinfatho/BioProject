@@ -16,13 +16,13 @@ const CAMERA_INITIAL_STATE = {
 const MOVE_SPEED = 0.05;
 const FAST_MOVE_SPEED = 0.15;
 const LOD_COOLDOWN_MS = 200;
-const MAX_POINTS_PER_CHANNEL = 1600000;
+const MAX_POINTS_PER_CHANNEL = 20000000;
 const OPACITY_FLOOR = 0.35;
 const OPACITY_BOOST = 1.3;
 const EDGE_FEATHER = 0.99;
 const JITTER_SCALE = 0.1;
 const AMBIENT_COLOR = new THREE.Color(0.9, 0.9, 0.95);
-const DEFAULT_THRESHOLD_MIN_FRACTION = 0.1;
+const DEFAULT_THRESHOLD_MIN_FRACTION = 0.03;
 const DEFAULT_THRESHOLD_MAX_FRACTION = 0.9;
 
 // Color map for selection boxes
@@ -181,7 +181,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     if (estimatedPassing > MAX_POINTS_PER_CHANNEL) {
       const ratio = estimatedPassing / MAX_POINTS_PER_CHANNEL;
       sampling = Math.max(2, Math.ceil(Math.cbrt(Math.max(ratio, 1) * 2)));
-      if (totalVoxels > 10_000_000) {
+      if (totalVoxels > 20000000) {
         sampling = Math.max(sampling, 4);
       }
     }
