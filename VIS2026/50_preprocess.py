@@ -18,7 +18,7 @@ import numpy as np
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-SELECTED_DATASET = 2  # Set to 1 or 2 to preprocess that dataset
+SELECTED_DATASET = 2  # Set to 1 or 2; must match dataset you run 60_model.py on
 
 # Dataset configuration (aligned with 20_load_channels.py, 33_investigate.py, 40_normalizedChannel.py)
 DATASETS = {
@@ -47,9 +47,16 @@ def get_preprocessed_dir(dataset_id: Optional[int] = None) -> Path:
     did = dataset_id if dataset_id is not None else SELECTED_DATASET
     return BASE_DATA_DIR / f"preprocessed_dataset{did}"
 
-# Same channel/microenvironment config as model.py
-CHANNEL_NAMES: List[str] = ["PMEL", "MART1", "PRAME"]
-MICROENVIRONMENT_NAME: str = "Melanocytic tumor identity"
+# Same microenvironments as 60_model.py; run preprocess for the selected one to create <name>.npy
+MICROENVIRONMENTS: List[dict] = [
+    {"name": "Inflammation", "channels": ["MART1", "MX1", "IRF1", "CD11c"]},
+    {"name": "Immune cells", "channels": ["CD8a", "CD4", "CD15", "CD11c", "CD11b", "CD103", "CD20"]},
+    {"name": "B-cell", "channels": ["CD31", "CD20", "CD11b", "CD11c", "CD4"]},
+]
+SELECTED_MICROENVIRONMENT_INDEX = 0
+
+CHANNEL_NAMES: List[str] = MICROENVIRONMENTS[SELECTED_MICROENVIRONMENT_INDEX]["channels"]
+MICROENVIRONMENT_NAME: str = MICROENVIRONMENTS[SELECTED_MICROENVIRONMENT_INDEX]["name"]
 # Z aggregation: every this many voxels (along z) are averaged into 1
 Z_AGGREGATE = 16
 
@@ -144,8 +151,8 @@ def run_preprocess(
     output_dir = output_dir if output_dir is not None else get_preprocessed_dir(did)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    if not 1 <= len(channel_names) <= 4:
-        raise ValueError("Provide 1 to 4 channel names.")
+    if not 1 <= len(channel_names) <= 20:
+        raise ValueError("Provide 1 to 20 channel names.")
 
     logger.info("Channels: %s", channel_names)
     logger.info("Microenvironment: %s", microenvironment_name)
@@ -207,18 +214,24 @@ def run_preprocess(
 
 if __name__ == "__main__":
     dataset_id = SELECTED_DATASET
-    run_preprocess(
-        dataset_id=dataset_id,
-        channel_names=CHANNEL_NAMES,
-        microenvironment_name=MICROENVIRONMENT_NAME,
-        z_aggregate=Z_AGGREGATE,
-    )
-    # Example: read value for channel 1 at x=600, y=200, z=10
     preprocessed_dir = get_preprocessed_dir(dataset_id)
-    out_path = preprocessed_dir / (microenvironment_to_filename(MICROENVIRONMENT_NAME) + ".npy")
     dataset_name = DATASETS.get(dataset_id, {}).get("name", f"Dataset {dataset_id}")
-    print(f"{dataset_name}: Preprocessed output -> {preprocessed_dir}")
-    if out_path.exists():
-        data = load_preprocessed_table(out_path)
-        value = get_value_at(data, channel=1, z=10, y=100, x=600)
-        print("Example lookup: channel=1, z=10, y=100, x=600 -> value =", value)
+    saved: List[Path] = []
+    for i, env in enumerate(MICROENVIRONMENTS):
+        name = env["name"]
+        channels = env["channels"]
+        logger.info("=== Microenvironment %d/%d: %s (channels: %s) ===", i + 1, len(MICROENVIRONMENTS), name, channels)
+        try:
+            out_path = run_preprocess(
+                dataset_id=dataset_id,
+                channel_names=channels,
+                microenvironment_name=name,
+                z_aggregate=Z_AGGREGATE,
+                output_dir=preprocessed_dir,
+            )
+            saved.append(out_path)
+        except (FileNotFoundError, ValueError) as e:
+            logger.warning("Skipping %s: %s", name, e)
+    print(f"\n{dataset_name}: Preprocessed {len(saved)}/{len(MICROENVIRONMENTS)} microenvironments -> {preprocessed_dir}")
+    for p in saved:
+        print(f"  {p}")

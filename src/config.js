@@ -3,9 +3,11 @@ export const CONFIG = {
     DATA_DIR: 'Data',
     // ROI positions: path to output folder (relative to BASE_URL)
     POSITIONS_BASE: 'VIS2026/output',
-    // Microenvironments: { id, label, getFilename(datasetId) }
+    // Microenvironments: must match 60_model.py MICROENVIRONMENTS; getFilename returns positions file name
     MICROENVIRONMENTS: [
-        { id: 'melanocytic', label: 'Melanocytic', getFilename: (datasetId) => datasetId === 1 ? 'positions_Melanocytic_tumor_identity.json' : 'positions_dataset2.json' }
+        { id: 'inflammation', label: 'Inflammation', getFilename: () => 'positions_Inflammation.json' },
+        { id: 'immune-cells', label: 'Immune cells', getFilename: () => 'positions_Immune_cells.json' },
+        { id: 'b-cell', label: 'B-cell', getFilename: () => 'positions_B-cell.json' }
     ],
     DATASET_OPTIONS: [
         { id: 1, label: 'Dataset 1' },

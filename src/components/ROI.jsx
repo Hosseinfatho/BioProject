@@ -1,6 +1,9 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { CONFIG } from '../config';
 
+// Microenvironment options and filenames must match 60_model.py output: positions_Inflammation.json, positions_Immune_cells.json, positions_B-cell.json
+const MICROENVIRONMENTS = CONFIG.MICROENVIRONMENTS ?? [];
+
 const inputStyle = {
   padding: '4px 8px',
   backgroundColor: '#222',
@@ -10,11 +13,19 @@ const inputStyle = {
   fontSize: '12px'
 };
 
-const ROI_BOX_SIZE = 200;
+// Base size in position space; 3x in x,y for bigger tiles in visualization
+const ROI_BOX_SIZE = 200 * 3;
+
+function getPositionsFilename(microenv, datasetId) {
+  if (!microenv) return 'positions_Inflammation.json';
+  if (typeof microenv.getFilename === 'function') return microenv.getFilename(datasetId);
+  const base = (microenv.label ?? microenv.id ?? '').replace(/\s+/g, '_').replace(/\//g, '_') || 'Inflammation';
+  return `positions_${base}.json`;
+}
 
 function ROI({ onPositionsChange, onRoiBoxChange }) {
   const [enabled, setEnabled] = useState(false);
-  const [microenvironment, setMicroenvironment] = useState(CONFIG.MICROENVIRONMENTS[0]?.id ?? 'melanocytic');
+  const [microenvironment, setMicroenvironment] = useState(MICROENVIRONMENTS[0]?.id ?? 'inflammation');
   const [percent, setPercent] = useState(1);
   const [showInVisualization, setShowInVisualization] = useState(false);
   const [positions, setPositions] = useState([]);
@@ -29,10 +40,10 @@ function ROI({ onPositionsChange, onRoiBoxChange }) {
   const handleShow = useCallback(async () => {
     if (!enabled) return;
 
-    const microenv = CONFIG.MICROENVIRONMENTS.find((m) => m.id === microenvironment);
+    const microenv = MICROENVIRONMENTS.find((m) => m.id === microenvironment);
     if (!microenv) return;
 
-    const filename = typeof microenv.getFilename === 'function' ? microenv.getFilename(datasetId) : microenv.filename || 'positions_Melanocytic_tumor_identity.json';
+    const filename = getPositionsFilename(microenv, datasetId);
     const url = `${baseUrl}/${positionsBase}/dataset${datasetId}/${filename}`;
 
     setLoading(true);
@@ -120,7 +131,7 @@ function ROI({ onPositionsChange, onRoiBoxChange }) {
             disabled={!enabled}
             style={{ ...inputStyle, cursor: enabled ? 'pointer' : 'not-allowed', minWidth: 120 }}
           >
-            {CONFIG.MICROENVIRONMENTS.map((m) => (
+            {MICROENVIRONMENTS.map((m) => (
               <option key={m.id} value={m.id}>{m.label}</option>
             ))}
           </select>

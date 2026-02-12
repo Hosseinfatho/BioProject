@@ -24,7 +24,22 @@ from torch_geometric.nn import GATConv, global_add_pool, global_max_pool, global
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-SELECTED_DATASET = 1  # Set to 1 or 2 to run pipeline on that dataset
+
+
+def _json_convert(obj: Any) -> Any:
+    """Convert numpy/torch types to native Python for JSON serialization."""
+    if isinstance(obj, (np.floating, np.float32, np.float64)):
+        return float(obj)
+    if isinstance(obj, (np.integer, np.int32, np.int64)):
+        return int(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, dict):
+        return {k: _json_convert(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_json_convert(v) for v in obj]
+    return obj
+SELECTED_DATASET = 2  # Set to 1 or 2 to run pipeline on that dataset
 
 # ---------------------------------------------------------------------------
 # Dataset configuration (aligned with 55_preprocess.py, 40_normalizedChannel.py)
@@ -75,17 +90,28 @@ def get_subgraphs_dir(dataset_id: Optional[int] = None) -> Path:
     return BASE_DATA_DIR / f"subgraphs_dataset{did}"
 
 # ---------------------------------------------------------------------------
-# Default configuration: 1-4 channel names + microenvironment name
+# Microenvironments: name (used for output filename) + channels to use
 # ---------------------------------------------------------------------------
-CHANNEL_NAMES: List[str] = ["SOX10", "MITF", "PMEL", "MART1"]
-MICROENVIRONMENT_NAME: str = "Melanocytic tumor identity"
+MICROENVIRONMENTS: List[Dict[str, Any]] = [
+    {"name": "Inflammation", "channels": ["MART1", "MX1", "IRF1", "CD11c"]},
+    {"name": "Immune cells", "channels": ["CD8a", "CD4", "CD15", "CD11c", "CD11b", "CD103", "CD20"]},
+    {"name": "B-cell", "channels": ["CD31", "CD20", "CD11b", "CD11c", "CD4"]},
+]
+# Which microenvironment to run when using default (index into MICROENVIRONMENTS)
+SELECTED_MICROENVIRONMENT_INDEX = 0
+
+CHANNEL_NAMES: List[str] = MICROENVIRONMENTS[SELECTED_MICROENVIRONMENT_INDEX]["channels"]
+MICROENVIRONMENT_NAME: str = MICROENVIRONMENTS[SELECTED_MICROENVIRONMENT_INDEX]["name"]
 
 # Subgraph: composite voxel = n×n×n block. Patch size z=12, x=16, y=16. Each composite voxel = one node.
 PATCH_Z = 12
 PATCH_Y = 16
 PATCH_X = 16
-# Interaction radius: connect two composite voxels if ||center_i - center_j||_2 <= r (r = 3 × node size).
-INTERACTION_RADIUS = 3 * max(PATCH_Z, PATCH_Y, PATCH_X)  # 48 in grid units; centers spaced by patch size.
+# Ibar: sum of normalized voxel values > INTENSITY_THRESHOLD over all channels in each composite voxel.
+# avg_term = Ibar / count_pos where count_pos = number of voxels > threshold.
+INTENSITY_THRESHOLD = 0.05
+# ROI: 8 neighbors in (x,y) plane; ROI centers step by ROI_STEP and must be 1 away from border.
+ROI_STEP = 3
 
 # Training
 EPOCHS = 10
@@ -248,74 +274,84 @@ def load_subgraph_npz(npz_path: Path) -> Tuple[np.ndarray, Tuple[int, int, int]]
 
 
 # ---------------------------------------------------------------------------
-# Composite-voxel spatial graph (paper: nodes = composite voxels, edges within radius r, w_ij = 1/(||x_i-x_j||+1))
+# Composite-voxel graph: Ibar = sum of voxel values > 0.05 over channels; 8-neighbor ROI.
 # ---------------------------------------------------------------------------
+# 8-neighbor offsets in (iy, ix) plane (same iz): (dy, dx)
+_EIGHT_NEIGHBORS = [
+    (1, 0), (-1, 0), (0, 1), (0, -1),
+    (1, 1), (1, -1), (-1, -1), (-1, 1),
+]
+
 
 def build_composite_voxel_graph(
     volume: np.ndarray,
     patch_z: int = PATCH_Z,
     patch_y: int = PATCH_Y,
     patch_x: int = PATCH_X,
-    interaction_radius: float = INTERACTION_RADIUS,
-) -> Tuple[Data, np.ndarray, np.ndarray]:
+) -> Tuple[Data, np.ndarray, np.ndarray, np.ndarray, Tuple[int, int, int]]:
     """
-    Build spatial graph G=(V,E). Each node i = one composite voxel S_i with:
-    - centroid x_i = (iz, iy, ix) in grid coords
-    - mean intensity I_i = (mean over patch for each channel) in R^C
-    Node feature f_i = (x_i_normalized, I_i) with x_i normalized to [0,1] by volume shape.
-    Edge (i,j) in E iff ||x_i - x_j||_2 <= interaction_radius. Edge weight w_ij = 1/(||x_i-x_j||_2+1).
-    Returns: (full_graph_Data, centers (M,3), mean_intensities (M,) scalar per node for scoring).
+    Ibar_i = sum over all channels of (sum of v for v in composite(i) where v > INTENSITY_THRESHOLD).
+    count_pos_i = number of voxels > threshold in composite i. avg_term_i = Ibar_i / count_pos_i (for scoring).
+    Graph: 8-neighbor connectivity in (iy, ix) plane (same iz). w_ij = 1.0.
+    Returns: (full_graph, centers (M,3), Ibar (M,), count_pos (M,), grid_shape (nz, ny, nx)).
     """
     C, Z, Y, X = volume.shape
+    th = INTENSITY_THRESHOLD
     centers = []
-    mean_intensities_list = []  # (M, C)
+    ibar_list = []
+    count_pos_list = []
     for iz in range(0, Z, patch_z):
         for iy in range(0, Y, patch_y):
             for ix in range(0, X, patch_x):
                 patch = volume[:, iz:iz + patch_z, iy:iy + patch_y, ix:ix + patch_x]
                 if patch.size == 0:
                     continue
-                # centroid in grid units (use center of patch)
                 cz = iz + min(patch_z, patch.shape[1]) // 2
                 cy = iy + min(patch_y, patch.shape[2]) // 2
                 cx = ix + min(patch_x, patch.shape[3]) // 2
                 centers.append([cz, cy, cx])
-                mean_i = np.mean(patch, axis=(1, 2, 3)).astype(np.float32)  # (C,)
-                mean_intensities_list.append(mean_i)
-    centers = np.array(centers, dtype=np.float32)  # (M, 3)
-    mean_intensities = np.array(mean_intensities_list, dtype=np.float32)  # (M, C)
+                # Ibar = sum of all voxel values > th (all channels); count_pos = number of such voxels
+                mask = patch > th
+                ibar_list.append(float(np.sum(patch * mask)))
+                count_pos_list.append(int(np.sum(mask)))
+    centers = np.array(centers, dtype=np.float32)
+    Ibar = np.array(ibar_list, dtype=np.float32)
+    count_pos = np.array(count_pos_list, dtype=np.float32)
+    count_pos = np.maximum(count_pos, 1e-12)
     M = centers.shape[0]
-    # Normalize centroids to [0,1] for node features
+    nz = len(range(0, Z, patch_z))
+    ny = len(range(0, Y, patch_y))
+    nx = len(range(0, X, patch_x))
+    grid_shape = (nz, ny, nx)
+
+    # Node features: normalized centroid (3) + Ibar and count_pos as channel-like (e.g. 2) for GAT
     x_norm = centers.copy()
     x_norm[:, 0] = x_norm[:, 0] / max(Z, 1)
     x_norm[:, 1] = x_norm[:, 1] / max(Y, 1)
     x_norm[:, 2] = x_norm[:, 2] / max(X, 1)
-    node_features = np.concatenate([x_norm, mean_intensities], axis=1).astype(np.float32)  # (M, 3+C)
-    # Scalar mean per node for pairwise scoring: mean over channels
-    mean_scalar = np.mean(mean_intensities, axis=1).astype(np.float32)  # (M,)
+    feat_extra = np.stack([Ibar, Ibar / count_pos], axis=1).astype(np.float32)  # (M, 2)
+    node_features = np.concatenate([x_norm, feat_extra], axis=1).astype(np.float32)  # (M, 5)
 
-    # Edges: (i,j) if ||center_i - center_j||_2 <= r; weight = 1/(dist+1)
+    # Linear index: (g_iz, g_iy, g_ix) -> g_iz * (ny*nx) + g_iy * nx + g_ix
+    def grid_to_idx(gi: int, gj: int, gk: int) -> int:
+        return gi * (ny * nx) + gj * nx + gk
+
+    # Edges: 8 neighbors in (iy, ix) plane only
     edge_src, edge_dst, edge_w = [], [], []
-    for i in tqdm(range(M), desc="Build graph edges", unit="node"):
-        for j in range(i + 1, M):
-            d = np.sqrt(np.sum((centers[i] - centers[j]) ** 2))
-            if d <= interaction_radius:
-                w = 1.0 / (float(d) + 1.0)
-                edge_src.extend([i, j])
-                edge_dst.extend([j, i])
-                edge_w.extend([w, w])
-    if len(edge_src) == 0:
-        # fallback: connect neighbors within radius (both directions)
-        for i in range(M):
-            for j in range(M):
-                if i >= j:
+    for gi in range(nz):
+        for gj in range(ny):
+            for gk in range(nx):
+                i = grid_to_idx(gi, gj, gk)
+                if i >= M:
                     continue
-                d = np.sqrt(np.sum((centers[i] - centers[j]) ** 2))
-                if d <= interaction_radius and d > 0:
-                    w = 1.0 / (float(d) + 1.0)
-                    edge_src.extend([i, j])
-                    edge_dst.extend([j, i])
-                    edge_w.extend([w, w])
+                for dy, dx in _EIGHT_NEIGHBORS:
+                    nj, nk = gj + dy, gk + dx
+                    if 0 <= nj < ny and 0 <= nk < nx:
+                        j = grid_to_idx(gi, nj, nk)
+                        if j < M:
+                            edge_src.append(i)
+                            edge_dst.append(j)
+                            edge_w.append(1.0)
     edge_index = np.stack([np.array(edge_src), np.array(edge_dst)], axis=0)
     edge_attr = np.array(edge_w, dtype=np.float32)
 
@@ -325,15 +361,13 @@ def build_composite_voxel_graph(
         edge_attr=torch.tensor(edge_attr, dtype=torch.float32),
     )
     full_graph.centers = centers
-    full_graph.mean_intensities = mean_intensities
-    full_graph.mean_scalar = mean_scalar
-    return full_graph, centers, mean_scalar
+    full_graph.mean_scalar = Ibar
+    return full_graph, centers, Ibar, count_pos, grid_shape
 
 
 def extract_ego_subgraphs(
     full_graph: Data,
     centers: np.ndarray,
-    interaction_radius: float = INTERACTION_RADIUS,
 ) -> List[Data]:
     """
     For each node i, extract subgraph: node i + all j with (i,j) in E (neighbors within radius).
@@ -546,77 +580,141 @@ def compute_interaction_scores(
     model: ConGAT,
     full_graph: Data,
     centers: np.ndarray,
-    mean_scalar: np.ndarray,
+    Ibar: np.ndarray,
+    count_pos: np.ndarray,
+    grid_shape: Tuple[int, int, int],
     device: torch.device,
     top_k: Optional[int] = None,
     top_p_percent: float = TOP_PERCENT,
 ) -> List[Dict[str, Any]]:
     """
-    Score formula (paper ConGAT):
-
-      Pairwise interaction (custom): for edge (i,j) with j in N_r(i):
-        i_ij^(k) = (s_i + s_j) * (Ibar_i^(1/4) + Ibar_j^(1/4)) * w_ij
-      (4th root on average only increases its value vs sqrt; saliency unchanged.)
-
-      Node-level interaction score (Eq. roi_score):
-        Score_r^(k)(i) = max { i_ij^(k) : j in N_r(i), j != i }
-
-      Where:
-        s_i^(k), s_j^(k) = saliency from GAT for category k (sigmoid(w_k^T z_i))
-        Ibar_i^(k), Ibar_j^(k) = mean biomarker intensity for category k at node i,j (here: mean over microenvironment channels)
-        w_ij = updated edge weight (learned refinement of 1/(||x_i-x_j||+1))
-        N_r(i) = neighbors of i within spatial radius r
-
-    Returns list of composite voxels sorted descending by Score_r^(k)(i). Optionally take top p% (default 5%).
+    ROI scoring:
+      Ibar_i = sum of voxel values > 0.05 over all channels in composite i.
+      avg_term_i = Ibar_i / count_pos_i (count_pos = number of voxels > 0.05).
+      s_i = Ibar_i (used in pairwise score).
+      i_ij = (s_i * s_j) * (avg_term_i * avg_term_j) * w_ij; return neighbor j coords with each i_ij.
+      S_ROI(i) = Ibar_i + sum(Ibar_j for j in 8 neighbors).
+    ROI centers: step by ROI_STEP in (iy, ix), valid when 1 <= iy <= ny-2, 1 <= ix <= nx-2.
     """
+    nz, ny, nx = grid_shape
+    M = centers.shape[0]
+    step = ROI_STEP
+
+    def idx_to_grid(idx: int) -> Tuple[int, int, int]:
+        gi = idx // (ny * nx)
+        rest = idx % (ny * nx)
+        gj = rest // nx
+        gk = rest % nx
+        return gi, gj, gk
+
+    # ROI center indices: (g_iy, g_ix) in [1, ny-2] and [1, nx-2], step 3; all g_iz
+    roi_center_indices = []
+    for gi in range(nz):
+        for gj in range(1, ny - 1):
+            if (gj - 1) % step != 0:
+                continue
+            for gk in range(1, nx - 1):
+                if (gk - 1) % step != 0:
+                    continue
+                idx = gi * (ny * nx) + gj * nx + gk
+                if idx < M:
+                    roi_center_indices.append(idx)
+
+    # Build neighbor list from edges
     model.eval()
-    x = full_graph.x.to(device)
-    edge_index = full_graph.edge_index.to(device)
-    edge_attr = full_graph.edge_attr.to(device) if full_graph.edge_attr is not None else None
-    batch = torch.zeros(x.size(0), dtype=torch.long, device=device)
-    with torch.no_grad():
-        _, saliency, _ = model(x, edge_index, edge_attr, batch=batch, return_node_emb=True)
-        # Paper: "w_ij is the updated edge weight" in pairwise interaction; use model's learned refinement
-        ew_t = model._updated_edge_attr(edge_attr)
-        ew = ew_t.cpu().numpy() if ew_t is not None else np.ones(full_graph.edge_index.shape[1])
-    s = saliency.squeeze(1).cpu().numpy()  # s_i^(k) saliency for category k
     ei = full_graph.edge_index.cpu().numpy()
+    edge_attr = full_graph.edge_attr
+    ew = np.ones(ei.shape[1], dtype=np.float32)
+    if edge_attr is not None:
+        ew = edge_attr.numpy().copy()
+        if hasattr(model, "_updated_edge_attr"):
+            with torch.no_grad():
+                ew_t = model._updated_edge_attr(edge_attr.to(device))
+                if ew_t is not None:
+                    ew = ew_t.cpu().numpy()
     neighbors = defaultdict(list)
     for t in range(ei.shape[1]):
         i, j = int(ei[0, t]), int(ei[1, t])
         if i != j:
-            neighbors[i].append((j, ew[t]))
-    M = centers.shape[0]
-    # i_ij = (s_i + s_j) * (Ibar_i^(1/4) + Ibar_j^(1/4)) * w_ij  (4th root on average only, increases its value)
-    avg_safe = np.maximum(mean_scalar, 1e-12)
-    avg_term = np.power(avg_safe, 0.25)  # 4th root: Ibar^(1/4)
-    node_scores = np.zeros(M)
-    for i in tqdm(range(M), desc="Interaction scores", unit="node"):
-        best = 0.0
-        for j, w_ij in neighbors[i]:
-            i_ij = (s[i] + s[j]) * (avg_term[i] + avg_term[j]) * w_ij
-            if i_ij > best:
-                best = i_ij
-        node_scores[i] = best
-    order = np.argsort(-node_scores)
-    n_take = len(order)
+            neighbors[i].append((j, float(ew[t])))
+
+    s = Ibar.copy()
+    avg_term = np.maximum(Ibar / count_pos, 1e-12)
+
+    # Optional: GAT saliency per node for roi_avg_saliency (average saliency in whole ROI)
+    saliency_per_node = None
+    try:
+        x = full_graph.x.to(device)
+        edge_index = full_graph.edge_index.to(device)
+        edge_attr = full_graph.edge_attr.to(device) if full_graph.edge_attr is not None else None
+        batch = torch.zeros(x.size(0), dtype=torch.long, device=device)
+        with torch.no_grad():
+            _, saliency, _ = model(x, edge_index, edge_attr, batch=batch, return_node_emb=True)
+        saliency_per_node = saliency.squeeze(1).cpu().numpy()
+    except Exception:
+        pass
+    if saliency_per_node is None:
+        saliency_per_node = Ibar.copy()
+
+    coord_scale = 16
+    results = []
+    roi_scores = []
+    for idx in tqdm(roi_center_indices, desc="ROI scoring", unit="roi"):
+        s_i = s[idx]
+        a_i = avg_term[idx]
+        roi_sum = Ibar[idx]
+        saliency_sum = float(saliency_per_node[idx])
+        neighbor_list = []
+        best_i_ij = 0.0
+        for j, w_ij in neighbors[idx]:
+            s_j = s[j]
+            a_j = avg_term[j]
+            roi_sum += Ibar[j]
+            saliency_sum += saliency_per_node[j]
+            i_ij = (s_i * s_j) * (a_i * a_j) * w_ij
+            if i_ij > best_i_ij:
+                best_i_ij = i_ij
+            iz_j, iy_j, ix_j = int(centers[j, 0]), int(centers[j, 1]), int(centers[j, 2])
+            neighbor_list.append({
+                "x": int(ix_j * coord_scale),
+                "y": int(iy_j * coord_scale),
+                "z": int(iz_j * coord_scale),
+                "i_ij": round(float(i_ij), 6),
+            })
+        n_roi = 1 + len(neighbor_list)
+        roi_avg_intensity = roi_sum / n_roi
+        roi_avg_saliency = saliency_sum / n_roi
+        roi_scores.append((best_i_ij, idx, roi_sum, neighbor_list, roi_avg_intensity, roi_avg_saliency))
+
+    roi_scores.sort(key=lambda t: -t[0])
+    # Normalize to [0, 1] by max over all ROIs (3 decimal places)
+    max_roi_intensity = max((t[4] for t in roi_scores), default=1e-12)
+    max_roi_saliency = max((t[5] for t in roi_scores), default=1e-12)
+    max_score = max((t[0] for t in roi_scores), default=1e-12)
+    max_roi_intensity = max(max_roi_intensity, 1e-12)
+    max_roi_saliency = max(max_roi_saliency, 1e-12)
+    max_score = max(max_score, 1e-12)
+
+    n_take = len(roi_scores)
     if top_p_percent > 0:
-        n_take = max(1, int(np.ceil(M * top_p_percent / 100.0)))
+        n_take = max(1, int(np.ceil(n_take * top_p_percent / 100.0)))
     if top_k is not None and top_k > 0:
         n_take = min(n_take, top_k)
-    order = order[:n_take]
-    results = []
-    # Output coordinates in voxel units: grid indices × COORD_SCALE (e.g. 16)
-    coord_scale = 16
-    for rank, idx in enumerate(order, start=1):
-        # centers[idx] = (z, y, x) from volume shape (C, Z, Y, X); output (x,y,z) for JSON
+    roi_scores = roi_scores[:n_take]
+
+    for rank, (score_val, idx, _roi_sum, _neighbor_list, roi_avg_intensity, roi_avg_saliency) in enumerate(roi_scores, start=1):
         iz, iy, ix = int(centers[idx, 0]), int(centers[idx, 1]), int(centers[idx, 2])
+        intensity_average_norm = round(min(1.0, float(roi_avg_intensity) / max_roi_intensity), 3)
+        saliency_average_norm = round(min(1.0, float(roi_avg_saliency) / max_roi_saliency), 3)
+        score_norm = round(min(1.0, float(score_val) / max_score), 3)
         results.append({
             "id": rank,
-            "x": int(ix * coord_scale), "y": int(iy * coord_scale), "z": int(iz * coord_scale),
-            "intensity": round(float(avg_term[idx]), 6),   # (Ibar)^(1/4)
-            "proximity": round(float(s[idx]), 6),          # saliency s_i^(k)
-            "score": round(float(node_scores[idx]), 6),    # Score_r^(k)(i)
+            "x": int(ix * coord_scale),
+            "y": int(iy * coord_scale),
+            "z": int(iz * coord_scale),
+            "intensity_average_norm": intensity_average_norm,
+            "saliency_average_norm": saliency_average_norm,
+            "score_norm": score_norm,
         })
     return results
 
@@ -656,15 +754,13 @@ def run_pipeline(
         pbar.update(1)
 
         pbar.set_description("3/7 Build graph")
-        full_graph, centers, mean_scalar = build_composite_voxel_graph(
-            volume, interaction_radius=INTERACTION_RADIUS
-        )
+        full_graph, centers, Ibar, count_pos, grid_shape = build_composite_voxel_graph(volume)
         M = full_graph.x.shape[0]
-        logger.info("Composite-voxel graph: %d nodes, %d edges (radius r=%.0f)", M, full_graph.edge_index.shape[1], INTERACTION_RADIUS)
+        logger.info("Composite-voxel graph: %d nodes, %d edges (8-neighbor), grid %s", M, full_graph.edge_index.shape[1], grid_shape)
         pbar.update(1)
 
         pbar.set_description("4/7 Ego subgraphs")
-        ego_subgraphs = extract_ego_subgraphs(full_graph, centers, INTERACTION_RADIUS)
+        ego_subgraphs = extract_ego_subgraphs(full_graph, centers)
         logger.info("Ego subgraphs for training: %d", len(ego_subgraphs))
         if len(ego_subgraphs) < 2:
             raise RuntimeError("Too few ego subgraphs for training.")
@@ -672,7 +768,7 @@ def run_pipeline(
 
         pbar.set_description("5/7 Training")
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        in_ch = 3 + C  # centroid (3) + mean intensities (C)
+        in_ch = int(full_graph.x.shape[1])  # 3 (centroid) + 2 (Ibar, avg)
         model = ConGAT(
             in_channels=in_ch,
             hidden=HIDDEN,
@@ -686,7 +782,7 @@ def run_pipeline(
 
         pbar.set_description("6/7 Scoring")
         positions = compute_interaction_scores(
-            model, full_graph, centers, mean_scalar, device,
+            model, full_graph, centers, Ibar, count_pos, grid_shape, device,
             top_k=TOP_K_POSITIONS, top_p_percent=TOP_PERCENT,
         )
         pbar.update(1)
@@ -697,23 +793,39 @@ def run_pipeline(
         "channel_names": channel_names,
         "volume_shape": [int(C), int(Z), int(Y), int(X)],
         "patch_shape": [PATCH_Z, PATCH_Y, PATCH_X],
-        "interaction_radius": float(INTERACTION_RADIUS),
+        "intensity_threshold": INTENSITY_THRESHOLD,
+        "roi_step": ROI_STEP,
         "subgraphs_dir": str(subgraphs_save_dir),
         "num_composite_voxels": M,
-        "score_definition": "Score_r^(k)(i) = max{ i_ij^(k) }; i_ij^(k) = (s_i+s_j) * (Ibar_i^(1/4) + Ibar_j^(1/4)) * w_ij",
+        "score_definition": "Ibar_i = sum of voxel values > 0.05 over channels; avg_term_i = Ibar_i/count_pos_i; i_ij = (s_i*s_j)*(avg_term_i*avg_term_j)*w_ij; S_ROI(i) = Ibar_i + sum(Ibar_j); 8-neighbor ROI, step 3",
         "top_p_percent": TOP_PERCENT,
         "positions": positions,
     }
     safe_name = microenvironment_name.replace(" ", "_").replace("/", "_")[:64]
     out_path = Path(output_dir) / f"positions_{safe_name}.json"
     with open(out_path, "w") as f:
-        json.dump(out_data, f, indent=2)
+        json.dump(_json_convert(out_data), f, indent=2)
     logger.info("Saved %d positions to %s", len(positions), out_path)
     return str(out_path)
 
 
 if __name__ == "__main__":
     dataset_id = SELECTED_DATASET
-    out_path = run_pipeline(dataset_id=dataset_id, microenvironment_name=MICROENVIRONMENT_NAME)
     dataset_name = DATASETS.get(dataset_id, {}).get("name", f"Dataset {dataset_id}")
-    print(f"{dataset_name}: Pipeline complete. Output: {out_path}")
+    results: List[str] = []
+    for i, env in enumerate(MICROENVIRONMENTS):
+        name = env["name"]
+        channels = env["channels"]
+        logger.info("=== Microenvironment %d/%d: %s ===", i + 1, len(MICROENVIRONMENTS), name)
+        try:
+            out_path = run_pipeline(
+                dataset_id=dataset_id,
+                microenvironment_name=name,
+                channel_names=channels,
+            )
+            results.append(out_path)
+        except FileNotFoundError as e:
+            logger.warning("Skipping %s: %s. Run 50_preprocess.py for this microenvironment first.", name, e)
+    print(f"\n{dataset_name}: Pipeline complete for {len(results)}/{len(MICROENVIRONMENTS)} microenvironments.")
+    for p in results:
+        print(f"  {p}")

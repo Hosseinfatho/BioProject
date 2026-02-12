@@ -1,20 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import channelNamesData from '../channel_names.json';
 
+// Microenvironments and channels aligned with 60_model.py / config (ROI positions)
 const REGION_DEFINITIONS = [
   {
-    id: 'tumor-epithelial',
-    title: 'Tumor / Epithelial',
-    markers: [
-      'MART1',
-      'SOX10',
-      'MITF',
-      'S100B',
-      'pan-CK',
-      'PRAME',
-      'β-catenin',
-      'E-cadherin'
-    ],
+    id: 'inflammation',
+    title: 'Inflammation',
+    markers: ['MART1', 'MX1', 'IRF1', 'CD11c'],
     palette: [
       [27, 158, 119],
       [217, 95, 2],
@@ -23,129 +15,62 @@ const REGION_DEFINITIONS = [
     ]
   },
   {
-    id: 'immune',
-    title: 'Immune (T/B/Myeloid)',
-    markers: [
-      'CD11b',
-      'CD11c',
-      'CD4',
-      'CD20',
-      'CD8a',
-      'FOXP3',
-      'PD1',
-      'LAG3',
-      'CD163',
-      'CD206'
-    ],
+    id: 'immune-cells',
+    title: 'Immune cells',
+    markers: ['CD8a', 'CD4', 'CD15', 'CD11c', 'CD11b', 'CD103', 'CD20'],
     palette: [
       [166, 206, 227],
       [31, 120, 180],
       [51, 160, 44],
-      [251, 154, 153]
+      [251, 154, 153],
+      [255, 127, 0],
+      [127, 127, 127],
+      [188, 189, 34]
     ]
   },
   {
-    id: 'stroma',
-    title: 'Stroma',
-    markers: [
-      'CD31',
-      'Collagen (SHG)',
-      'Lamin-ABC',
-      'pMLC2'
-    ],
+    id: 'b-cell',
+    title: 'B-cell',
+    markers: ['CD31', 'CD20', 'CD11b', 'CD11c', 'CD4'],
     palette: [
       [228, 26, 28],
       [55, 126, 184],
       [77, 175, 74],
-      [152, 78, 163]
-    ]
-  },
-  {
-    id: 'stress-metabolism',
-    title: 'Stress / Metabolism',
-    markers: [
-      'COX-IV',
-      'Catalase',
-      'γ-H2AX'
-    ],
-    palette: [
-      [102, 194, 165],
-      [252, 141, 98],
-      [141, 160, 203],
-      [231, 138, 195]
-    ]
-  },
-  {
-    id: 'checkpoint-crosstalk',
-    title: 'Checkpoint / Crosstalk',
-    markers: [
-      'PDL1',
-      'PD1',
-      'MHC-I',
-      'MHC-II',
-      'IRF1'
-    ],
-    palette: [
-      [141, 211, 199],
-      [255, 255, 179],
-      [190, 186, 218],
-      [251, 128, 114]
-    ]
-  },
-  {
-    id: 'proliferation-cellstate',
-    title: 'Proliferation / Cell State',
-    markers: [
-      'Ki67',
-      'CyclinD1',
-      'BAF1',
-      'H3K27me3',
-      "5’hmC"
-    ],
-    palette: [
-      [127, 201, 127],
-      [190, 174, 212],
-      [253, 192, 134],
-      [56, 108, 176]
+      [152, 78, 163],
+      [255, 255, 153]
     ]
   }
 ];
 
-// Two Region Combinations
+// Two Region Combinations (microenvironments)
 const TWO_REGION_COMBINATIONS = [
   {
-    id: 'tumor-immune',
-    title: 'Tumor + Immune',
-    description: 'Tumor–immune interaction',
-    regionIds: ['tumor-epithelial', 'immune']
+    id: 'inflammation-immune',
+    title: 'Inflammation + Immune cells',
+    description: 'Inflammation and immune cell markers',
+    regionIds: ['inflammation', 'immune-cells']
   },
   {
-    id: 'tumor-checkpoint',
-    title: 'Tumor + Checkpoint',
-    description: 'Immune evasion / PD-L1 biology',
-    regionIds: ['tumor-epithelial', 'checkpoint-crosstalk']
+    id: 'inflammation-bcell',
+    title: 'Inflammation + B-cell',
+    description: 'Inflammation and B-cell markers',
+    regionIds: ['inflammation', 'b-cell']
   },
   {
-    id: 'immune-stroma',
-    title: 'Immune + Stroma',
-    description: 'Immune positioning & stromal barriers',
-    regionIds: ['immune', 'stroma']
+    id: 'immune-bcell',
+    title: 'Immune cells + B-cell',
+    description: 'Immune and B-cell markers',
+    regionIds: ['immune-cells', 'b-cell']
   }
 ];
 
-// Three Region Combinations
+// Three Region Combinations (all microenvironments)
 const THREE_REGION_COMBINATIONS = [
   {
-    id: 'tumor-immune-checkpoint',
-    title: 'Tumor + Immune + Checkpoint',
-    description: 'Comprehensive immuno-oncology view',
-    regionIds: ['tumor-epithelial', 'immune', 'checkpoint-crosstalk']
-  },
-  {
-    id: 'tumor-stroma-proliferation',
-    title: 'Tumor + Stroma + Proliferation',
-    description: 'Architecture + growth + tumor cell state',
-    regionIds: ['tumor-epithelial', 'stroma', 'proliferation-cellstate']
+    id: 'inflammation-immune-bcell',
+    title: 'Inflammation + Immune cells + B-cell',
+    description: 'All three microenvironments',
+    regionIds: ['inflammation', 'immune-cells', 'b-cell']
   }
 ];
 
