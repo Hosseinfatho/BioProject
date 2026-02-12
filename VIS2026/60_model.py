@@ -39,7 +39,7 @@ def _json_convert(obj: Any) -> Any:
     if isinstance(obj, list):
         return [_json_convert(v) for v in obj]
     return obj
-SELECTED_DATASET = 2  # Set to 1 or 2 to run pipeline on that dataset
+SELECTED_DATASET = 1  # Set to 1 or 2 to run pipeline on that dataset
 
 # ---------------------------------------------------------------------------
 # Dataset configuration (aligned with 55_preprocess.py, 40_normalizedChannel.py)
@@ -592,7 +592,7 @@ def compute_interaction_scores(
       Ibar_i = sum of voxel values > 0.05 over all channels in composite i.
       avg_term_i = Ibar_i / count_pos_i (count_pos = number of voxels > 0.05).
       s_i = Ibar_i (used in pairwise score).
-      i_ij = (s_i * s_j) * (avg_term_i * avg_term_j) * w_ij; return neighbor j coords with each i_ij.
+      i_ij = (s_i + s_j) * (avg_term_i + avg_term_j) * w_ij; return neighbor j coords with each i_ij.
       S_ROI(i) = Ibar_i + sum(Ibar_j for j in 8 neighbors).
     ROI centers: step by ROI_STEP in (iy, ix), valid when 1 <= iy <= ny-2, 1 <= ix <= nx-2.
     """
@@ -671,7 +671,7 @@ def compute_interaction_scores(
             a_j = avg_term[j]
             roi_sum += Ibar[j]
             saliency_sum += saliency_per_node[j]
-            i_ij = (s_i * s_j) * (a_i * a_j) * w_ij
+            i_ij = (s_i + s_j) * (a_i + a_j) * w_ij
             if i_ij > best_i_ij:
                 best_i_ij = i_ij
             iz_j, iy_j, ix_j = int(centers[j, 0]), int(centers[j, 1]), int(centers[j, 2])
@@ -797,7 +797,7 @@ def run_pipeline(
         "roi_step": ROI_STEP,
         "subgraphs_dir": str(subgraphs_save_dir),
         "num_composite_voxels": M,
-        "score_definition": "Ibar_i = sum of voxel values > 0.05 over channels; avg_term_i = Ibar_i/count_pos_i; i_ij = (s_i*s_j)*(avg_term_i*avg_term_j)*w_ij; S_ROI(i) = Ibar_i + sum(Ibar_j); 8-neighbor ROI, step 3",
+        "score_definition": "Ibar_i = sum of voxel values > 0.05 over channels; avg_term_i = Ibar_i/count_pos_i; i_ij = (s_i+s_j)*(avg_term_i+avg_term_j)*w_ij; S_ROI(i) = Ibar_i + sum(Ibar_j); 8-neighbor ROI, step 3",
         "top_p_percent": TOP_PERCENT,
         "positions": positions,
     }

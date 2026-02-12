@@ -24,6 +24,7 @@ function App() {
   const [selectedRegionsData, setSelectedRegionsData] = useState([]);
   const [roiPositions, setRoiPositions] = useState([]);
   const [roiBoxes, setRoiBoxes] = useState(null);
+  const [highlightedRoiIndex, setHighlightedRoiIndex] = useState(null); // 1-based; hover on 3D box or chart bar
   const lastSelectionBoundsRef = useRef(null); // Persist selection bounds across region switches
 
   const handleChannelsChange = useCallback((updatedChannels) => {
@@ -230,6 +231,7 @@ function App() {
               initialSelectionBounds={lastSelectionBoundsRef.current}
               selectedRegionsData={selectedRegionsData}
               roiBoxes={roiBoxes}
+              onRoiHover={setHighlightedRoiIndex}
             />
           </div>
 
@@ -268,7 +270,7 @@ function App() {
                 key={selectedRegionsData.map(r => r.id).join('-') || 'empty'} 
                 selectedRegionsData={selectedRegionsData} 
                 channels={channels} 
-                selectedRegions={selectedRegions} 
+                selectedRegions={selectedRegions}
               />
             </div>
             {/* Direction View - 33.3% width */}
@@ -279,7 +281,12 @@ function App() {
               boxSizing: 'border-box',
               flexShrink: 0
             }}>
-              <ROI onPositionsChange={setRoiPositions} onRoiBoxChange={setRoiBoxes} />
+              <ROI
+                onPositionsChange={setRoiPositions}
+                onRoiBoxChange={setRoiBoxes}
+                highlightedRoiIndex={highlightedRoiIndex}
+                onChartRoiHover={setHighlightedRoiIndex}
+              />
             </div>
           </div>
         </div>

@@ -79,7 +79,7 @@ const getConfigSignature = (config) =>
 // Position space in ROI JSON uses grid index × 16; same as 60_model.py coord_scale
 const ROI_POSITION_SCALE = 16;
 
-const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initialSelectionBounds, selectedRegionsData = [], roiBoxes = null }) => {
+const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initialSelectionBounds, selectedRegionsData = [], roiBoxes = null, onRoiHover = null }) => {
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
@@ -423,15 +423,26 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
           console.error('Main_View: Error removing temporary wireframe:', err);
         }
       }
-      // Remove ROI wireframes
-      roiWireframesRef.current.forEach((wireframe) => {
-        if (wireframe && scene.children.includes(wireframe)) {
+      // Remove ROI wireframes and labels
+      roiWireframesRef.current.forEach((entry) => {
+        const w = entry.wireframe || entry;
+        const s = entry.sprite;
+        if (w && scene.children.includes(w)) {
           try {
-            scene.remove(wireframe);
-            if (wireframe.geometry) wireframe.geometry.dispose();
-            if (wireframe.material) wireframe.material.dispose();
+            scene.remove(w);
+            if (w.geometry) w.geometry.dispose();
+            if (w.material) w.material.dispose();
           } catch (err) {
             console.error('Main_View: Error removing ROI wireframe:', err);
+          }
+        }
+        if (s && scene.children.includes(s)) {
+          try {
+            scene.remove(s);
+            if (s.material?.map) s.material.map.dispose();
+            if (s.material) s.material.dispose();
+          } catch (err) {
+            console.error('Main_View: Error removing ROI label:', err);
           }
         }
       });
@@ -741,8 +752,43 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     }
   };
 
-  // Add a single ROI rectangle (flat in XY plane) from positions JSON; stored in roiWireframesRef
-  const addRoiWireframe = useCallback((worldBounds) => {
+  // Create a sprite with ROI number label (canvas texture); position below the box
+  const createRoiLabelSprite = useCallback((roiIndex, center, boxSize) => {
+    const canvas = document.createElement('canvas');
+    const size = 64;
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = '#00ff88';
+    ctx.strokeStyle = '#00ff88';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, size - 2, size - 2);
+    ctx.font = 'bold 32px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#00ff88';
+    ctx.fillText(String(roiIndex), size / 2, size / 2);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false
+    });
+    const sprite = new THREE.Sprite(material);
+    const labelSize = 0.04;
+    sprite.scale.set(labelSize, labelSize, 1);
+    sprite.position.copy(center);
+    sprite.position.y -= (boxSize.y / 2) + labelSize * 0.6;
+    sprite.renderOrder = 101;
+    return sprite;
+  }, []);
+
+  // Add a single ROI rectangle (flat in XY plane) from positions JSON; stored in roiWireframesRef. Optionally add label with roiIndex.
+  const addRoiWireframe = useCallback((worldBounds, roiIndex) => {
     if (!sceneRef.current || !worldBounds?.center || !worldBounds?.size) return;
     const size = worldBounds.size;
     const center = worldBounds.center;
@@ -765,9 +811,16 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     wireframe.userData.isRoiBox = true;
     wireframe.userData.worldBounds = worldBounds;
     sceneRef.current.add(wireframe);
-    roiWireframesRef.current.push(wireframe);
+    wireframe.userData.roiIndex = roiIndex;
+    let sprite = null;
+    if (roiIndex != null && roiIndex > 0) {
+      sprite = createRoiLabelSprite(roiIndex, center.clone(), size);
+      sprite.userData.roiIndex = roiIndex;
+      sceneRef.current.add(sprite);
+    }
+    roiWireframesRef.current.push({ wireframe, sprite });
     planeGeometry.dispose();
-  }, []);
+  }, [createRoiLabelSprite]);
 
   // Sync ROI boxes from props: when roiBoxes (array) is set, convert each to world and add wireframes; when null, remove all
   useEffect(() => {
@@ -775,15 +828,22 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     const scene = sceneRef.current;
     const roiWireframes = roiWireframesRef.current;
     while (roiWireframes.length) {
-      const w = roiWireframes.pop();
+      const entry = roiWireframes.pop();
+      const w = entry.wireframe || entry;
+      const s = entry.sprite;
       if (scene.children.includes(w)) scene.remove(w);
       if (w.geometry) w.geometry.dispose();
       if (w.material) w.material.dispose();
+      if (s && scene.children.includes(s)) {
+        scene.remove(s);
+        if (s.material?.map) s.material.map.dispose();
+        if (s.material) s.material.dispose();
+      }
     }
     const list = Array.isArray(roiBoxes) ? roiBoxes : roiBoxes ? [roiBoxes] : [];
     list.forEach((roiBox) => {
       const worldBounds = roiBoxToWorldBounds(roiBox);
-      if (worldBounds) addRoiWireframe(worldBounds);
+      if (worldBounds) addRoiWireframe(worldBounds, roiBox.roiIndex ?? roiBox.roiId);
     });
   }, [roiBoxes, roiBoxToWorldBounds, addRoiWireframe]);
 
@@ -1277,6 +1337,20 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
             state.panOffset.y -= (e.clientY - mouseY) * 0.001;
             updateCameraPosition();
           }
+          if (onRoiHover && !isRotating && !isPanning && rendererRef.current && cameraRef.current && sceneRef.current) {
+            const rect = rendererRef.current.domElement.getBoundingClientRect();
+            const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), cameraRef.current);
+            const roiObjects = roiWireframesRef.current.flatMap((entry) => [entry.wireframe, entry.sprite].filter(Boolean));
+            const hits = raycaster.intersectObjects(roiObjects, false);
+            if (hits.length > 0 && hits[0].object.userData.roiIndex != null) {
+              onRoiHover(hits[0].object.userData.roiIndex);
+            } else {
+              onRoiHover(null);
+            }
+          }
         }
         mouseX = e.clientX;
         mouseY = e.clientY;
@@ -1462,16 +1536,25 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
         }
       });
       cuboidWireframesRef.current = [];
-      roiWireframesRef.current.forEach((wireframe) => {
-        if (wireframe && sceneRef.current) {
+      roiWireframesRef.current.forEach((entry) => {
+        const w = entry.wireframe || entry;
+        const s = entry.sprite;
+        if (w && sceneRef.current) {
           try {
-            if (sceneRef.current.children.includes(wireframe)) {
-              sceneRef.current.remove(wireframe);
-            }
-            if (wireframe.geometry) wireframe.geometry.dispose();
-            if (wireframe.material) wireframe.material.dispose();
+            if (sceneRef.current.children.includes(w)) sceneRef.current.remove(w);
+            if (w.geometry) w.geometry.dispose();
+            if (w.material) w.material.dispose();
           } catch (err) {
             console.error('Main_View: Error disposing ROI wireframe:', err);
+          }
+        }
+        if (s && sceneRef.current) {
+          try {
+            if (sceneRef.current.children.includes(s)) sceneRef.current.remove(s);
+            if (s.material?.map) s.material.map.dispose();
+            if (s.material) s.material.dispose();
+          } catch (err) {
+            console.error('Main_View: Error disposing ROI label:', err);
           }
         }
       });

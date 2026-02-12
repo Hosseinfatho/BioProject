@@ -1250,9 +1250,9 @@ const Graph_Pannel = ({ selectedRegionData, selectedRegionsData, channels = [], 
   useEffect(() => {
     if (loading || !channelStats) return;
 
-    // Cleanup previous tooltip
     if (chartRef.current?.tooltip) {
       chartRef.current.tooltip.remove();
+      chartRef.current = null;
     }
 
     switch (graphType) {
@@ -1268,9 +1268,7 @@ const Graph_Pannel = ({ selectedRegionData, selectedRegionsData, channels = [], 
     }
 
     return () => {
-      if (chartRef.current?.tooltip) {
-        chartRef.current.tooltip.remove();
-      }
+      if (chartRef.current?.tooltip) chartRef.current.tooltip.remove();
     };
   }, [graphType, channelStats, loading, renderBarChart, renderHeatmap, renderViolinPlot]);
 
@@ -1414,6 +1412,7 @@ const Graph_Pannel = ({ selectedRegionData, selectedRegionsData, channels = [], 
               fontWeight: graphType === 'violin' ? '600' : '400'
             }}>Violin</span>
           </button>
+
         </div>
       </div>
 

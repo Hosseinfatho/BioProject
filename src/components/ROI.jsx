@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import * as d3 from 'd3';
 import { CONFIG } from '../config';
 
 // Microenvironment options and filenames must match 60_model.py output: positions_Inflammation.json, positions_Immune_cells.json, positions_B-cell.json
@@ -23,7 +24,7 @@ function getPositionsFilename(microenv, datasetId) {
   return `positions_${base}.json`;
 }
 
-function ROI({ onPositionsChange, onRoiBoxChange }) {
+function ROI({ onPositionsChange, onRoiBoxChange, highlightedRoiIndex = null, onChartRoiHover = null }) {
   const [enabled, setEnabled] = useState(false);
   const [microenvironment, setMicroenvironment] = useState(MICROENVIRONMENTS[0]?.id ?? 'inflammation');
   const [percent, setPercent] = useState(1);
@@ -32,6 +33,9 @@ function ROI({ onPositionsChange, onRoiBoxChange }) {
   const [filteredPositions, setFilteredPositions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const chartContainerRef = useRef(null);
+  const chartSvgRef = useRef(null);
+  const chartTooltipRef = useRef(null);
 
   const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
   const positionsBase = CONFIG.POSITIONS_BASE || 'VIS2026/output';
@@ -62,10 +66,12 @@ function ROI({ onPositionsChange, onRoiBoxChange }) {
       setFilteredPositions(filtered);
       onPositionsChange?.(filtered);
       if (showInVisualization && filtered.length > 0 && data.volume_shape) {
-        const boxes = filtered.map((pos) => ({
+        const boxes = filtered.map((pos, idx) => ({
           center: { x: pos.x, y: pos.y, z: pos.z },
           size: ROI_BOX_SIZE,
-          volumeShape: data.volume_shape
+          volumeShape: data.volume_shape,
+          roiId: pos.id,
+          roiIndex: idx + 1
         }));
         onRoiBoxChange?.(boxes);
       } else {
@@ -95,6 +101,156 @@ function ROI({ onPositionsChange, onRoiBoxChange }) {
     }
     setPercent(Math.max(0, Math.min(100, num)));
   };
+
+  // ROI stack chart: one stack per ROI = intensity_average_norm (bottom) + saliency_average_norm (top); Y [0, 2]
+  useEffect(() => {
+    if (chartTooltipRef.current) {
+      chartTooltipRef.current.remove();
+      chartTooltipRef.current = null;
+    }
+    const container = chartContainerRef.current;
+    const svgEl = chartSvgRef.current;
+    if (!container || !svgEl || !filteredPositions.length) return;
+
+    const sorted = [...filteredPositions].sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+    const width = container.clientWidth;
+    const height = Math.max(120, container.clientHeight);
+    const margin = { top: 20, right: 44, bottom: 36, left: 36 };
+    const chartWidth = width - margin.left - margin.right;
+    const chartHeight = height - margin.top - margin.bottom;
+
+    const svg = d3.select(svgEl);
+    svg.selectAll('*').remove();
+
+    const xScale = d3.scaleBand()
+      .domain(sorted.map((d) => String(d.id ?? 0)))
+      .range([0, chartWidth])
+      .padding(0.25);
+
+    const yScale = d3.scaleLinear()
+      .domain([0, 2])
+      .range([chartHeight, 0]);
+
+    const g = svg
+      .attr('width', width)
+      .attr('height', height)
+      .append('g')
+      .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    const tooltip = d3.select('body').append('div')
+      .attr('class', 'graph-tooltip')
+      .style('opacity', 0)
+      .style('position', 'absolute')
+      .style('background', 'rgba(0, 0, 0, 0.9)')
+      .style('color', '#fff')
+      .style('padding', '6px 8px')
+      .style('border-radius', '4px')
+      .style('pointer-events', 'none')
+      .style('font-size', '11px')
+      .style('z-index', '10000');
+    chartTooltipRef.current = tooltip.node();
+
+    sorted.forEach((d, i) => {
+      const roiIndex = i + 1;
+      const idStr = String(d.id ?? 0);
+      const intensity = Number(d.intensity_average_norm) ?? 0;
+      const saliency = Number(d.saliency_average_norm) ?? 0;
+      const x = xScale(idStr) ?? 0;
+      const bw = xScale.bandwidth();
+      const showHighlight = highlightedRoiIndex === roiIndex;
+
+      const setRoiHighlight = () => {
+        if (onChartRoiHover) onChartRoiHover(roiIndex);
+      };
+      const clearRoiHighlight = () => {
+        if (onChartRoiHover) onChartRoiHover(null);
+      };
+
+      if (intensity > 0) {
+        g.append('rect')
+          .attr('x', x)
+          .attr('y', yScale(intensity))
+          .attr('width', bw)
+          .attr('height', chartHeight - yScale(intensity))
+          .attr('fill', '#3b82f6')
+          .attr('opacity', 0.9)
+          .attr('data-roi-index', roiIndex)
+          .on('mouseover', function (event) {
+            d3.select(this).attr('opacity', 1);
+            setRoiHighlight();
+            tooltip.style('opacity', 1)
+              .html(`ROI ${idStr}<br/>intensity_average_norm: ${(intensity * 100).toFixed(1)}%`)
+              .style('left', (event.pageX + 10) + 'px')
+              .style('top', (event.pageY - 10) + 'px');
+          })
+          .on('mouseout', function () {
+            d3.select(this).attr('opacity', 0.9);
+            clearRoiHighlight();
+            tooltip.style('opacity', 0);
+          });
+      }
+      if (saliency > 0) {
+        const yTop = yScale(intensity + saliency);
+        const yBottom = yScale(intensity);
+        g.append('rect')
+          .attr('x', x)
+          .attr('y', yTop)
+          .attr('width', bw)
+          .attr('height', Math.max(0, yBottom - yTop))
+          .attr('fill', '#22c55e')
+          .attr('opacity', 0.9)
+          .attr('data-roi-index', roiIndex)
+          .on('mouseover', function (event) {
+            d3.select(this).attr('opacity', 1);
+            setRoiHighlight();
+            tooltip.style('opacity', 1)
+              .html(`ROI ${idStr}<br/>saliency_average_norm: ${(saliency * 100).toFixed(1)}%`)
+              .style('left', (event.pageX + 10) + 'px')
+              .style('top', (event.pageY - 10) + 'px');
+          })
+          .on('mouseout', function () {
+            d3.select(this).attr('opacity', 0.9);
+            clearRoiHighlight();
+            tooltip.style('opacity', 0);
+          });
+      }
+
+      if (showHighlight) {
+        g.append('rect')
+          .attr('x', x - 2)
+          .attr('y', -2)
+          .attr('width', bw + 4)
+          .attr('height', chartHeight + 4)
+          .attr('fill', 'none')
+          .attr('stroke', '#00ff88')
+          .attr('stroke-width', 2)
+          .attr('rx', 2);
+      }
+    });
+
+    g.append('g')
+      .attr('transform', `translate(0,${chartHeight})`)
+      .call(d3.axisBottom(xScale))
+      .selectAll('text')
+      .style('fill', '#fff')
+      .style('font-size', '9px');
+    g.append('g')
+      .call(d3.axisLeft(yScale).ticks(5))
+      .selectAll('text')
+      .style('fill', '#fff')
+      .style('font-size', '9px');
+    g.append('rect').attr('x', chartWidth - 34).attr('y', 0).attr('width', 10).attr('height', 10).attr('fill', '#3b82f6');
+    g.append('text').attr('x', chartWidth - 22).attr('y', 9).style('fill', '#fff').style('font-size', '9px').text('Intensity');
+    g.append('rect').attr('x', chartWidth - 34).attr('y', 14).attr('width', 10).attr('height', 10).attr('fill', '#22c55e');
+    g.append('text').attr('x', chartWidth - 22).attr('y', 23).style('fill', '#fff').style('font-size', '9px').text('Saliency');
+
+    return () => {
+      if (chartTooltipRef.current) {
+        chartTooltipRef.current.remove();
+        chartTooltipRef.current = null;
+      }
+    };
+  }, [filteredPositions, highlightedRoiIndex, onChartRoiHover]);
 
   const totalCount = positions.length;
   const displayCount = filteredPositions.length;
@@ -178,12 +334,26 @@ function ROI({ onPositionsChange, onRoiBoxChange }) {
       </div>
 
       {/* Status */}
-      <div style={{ marginTop: 8, fontSize: '11px', color: 'rgba(255,255,255,0.7)' }}>
+      <div style={{ marginTop: 8, fontSize: '11px', color: 'rgba(255,255,255,0.7)', flexShrink: 0 }}>
         {error ? (
           <span style={{ color: '#e57373' }}>{error}</span>
         ) : totalCount > 0 ? (
           <span>Showing {displayCount} of {totalCount} positions</span>
         ) : null}
+      </div>
+
+      {/* ROI stack chart: intensity + saliency per ROI (Y max 2) */}
+      <div
+        ref={chartContainerRef}
+        style={{
+          flex: 1,
+          minHeight: 100,
+          marginTop: 8,
+          overflow: 'hidden',
+          display: filteredPositions.length > 0 ? 'block' : 'none'
+        }}
+      >
+        <svg ref={chartSvgRef} style={{ width: '100%', height: '100%', display: 'block' }} />
       </div>
     </div>
   );
