@@ -59,8 +59,8 @@ DATASET_NAME = "Inflammation"
 CHANNEL_INDICES = [3, 2, 31, 42]  # MART1, MX1, IRF1, CD11c
 
 # Window: 512 × 512 in (x,y), full z=194. Center (x,y) = (2688, 3456).
-WINDOW_X = 1024
-WINDOW_Y = 1024
+WINDOW_X = 512
+WINDOW_Y = 512
 WINDOW_Z = 194
 CENTER_X = 2688
 CENTER_Y = 3456
@@ -129,7 +129,7 @@ def compute_window_slice(center_xy: Tuple[int, int], size_xy: Tuple[int, int], f
 
 def download_hi_res_window() -> bool:
     """
-    Download only the 1024*1024*194 window for channels MART1, MX1, IRF1, CD11c
+    Download only the 512*512*194 window for channels MART1, MX1, IRF1, CD11c
     at highest resolution (component 0) and save to Hi_res_dataset.
     """
     s3_path = _zarr_url_to_s3(DATASET_URL)

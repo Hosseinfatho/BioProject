@@ -15,7 +15,7 @@ import numpy as np
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-SELECTED_DATASET = 2  # Set to 1 or 2 to investigate that dataset
+SELECTED_DATASET = 1  # Set to 1 or 2 to investigate that dataset
 
 # Dataset configuration (aligned with 20_load_channels.py)
 DATASETS = {

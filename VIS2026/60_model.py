@@ -586,6 +586,7 @@ def compute_interaction_scores(
     device: torch.device,
     top_k: Optional[int] = None,
     top_p_percent: float = TOP_PERCENT,
+    coord_scale: int = 16,
 ) -> List[Dict[str, Any]]:
     """
     ROI scoring:
@@ -656,7 +657,6 @@ def compute_interaction_scores(
     if saliency_per_node is None:
         saliency_per_node = Ibar.copy()
 
-    coord_scale = 16
     results = []
     roi_scores = []
     for idx in tqdm(roi_center_indices, desc="ROI scoring", unit="roi"):
@@ -725,36 +725,52 @@ def run_pipeline(
     microenvironment_name: Optional[str] = None,
     output_dir: Optional[Path] = None,
     preprocessed_dir: Optional[Path] = None,
+    subgraphs_dir: Optional[Path] = None,
+    positions_filename: Optional[str] = None,
+    coord_scale: int = 16,
+    patch_z: Optional[int] = None,
+    patch_y: Optional[int] = None,
+    patch_x: Optional[int] = None,
 ) -> str:
     """
     Full pipeline (paper ConGAT): load preprocessed -> composite-voxel spatial graph (nodes = composite voxels,
     edges within radius r, w_ij=1/(dist+1)) -> train ConGAT on ego subgraphs -> interaction scoring -> save JSON.
+    Optional subgraphs_dir, positions_filename, coord_scale, patch_* for Hi-res / custom runs.
     """
+    pz = patch_z if patch_z is not None else PATCH_Z
+    py = patch_y if patch_y is not None else PATCH_Y
+    px = patch_x if patch_x is not None else PATCH_X
+
     did = dataset_id if dataset_id is not None else SELECTED_DATASET
     microenvironment_name = microenvironment_name or MICROENVIRONMENT_NAME
     channel_names = channel_names or CHANNEL_NAMES
-    preprocessed_dir = preprocessed_dir or get_preprocessed_dir(did)
-    output_dir = output_dir or get_output_dir(did)
-    subgraphs_base = get_subgraphs_dir(did)
+    preprocessed_dir = Path(preprocessed_dir) if preprocessed_dir is not None else get_preprocessed_dir(did)
+    output_dir = Path(output_dir) if output_dir is not None else get_output_dir(did)
+    subgraphs_base = Path(subgraphs_dir) if subgraphs_dir is not None else get_subgraphs_dir(did)
 
     logger.info("Dataset %d: Microenvironment: %s", did, microenvironment_name)
     steps = ["Load volume", "Create subgraphs", "Build graph", "Ego subgraphs", "Training", "Scoring", "Save JSON"]
     with tqdm(total=len(steps), desc="Pipeline", unit="step", position=0) as pbar:
         pbar.set_description("1/7 Load volume")
         volume = load_preprocessed(microenvironment_name, preprocessed_dir)
-        logger.info("Preprocessed volume shape (C, Z, Y, X): %s", volume.shape)
+        C, Z, Y, X = volume.shape
+        nz, ny, nx = (Z // pz), (Y // py), (X // px)
+        n_subgraphs = nz * ny * nx
+        logger.info("Preprocessed volume shape (C, Z, Y, X): %s → %d subgraphs (grid z×y×x = %d×%d×%d)",
+                    volume.shape, n_subgraphs, nz, ny, nx)
         pbar.update(1)
 
         pbar.set_description("2/7 Create subgraphs")
-        C, Z, Y, X = volume.shape
         subgraphs_save_dir = subgraphs_base / microenvironment_to_filename(microenvironment_name)
         _, _ = create_subgraphs_3d(
-            volume, patch_z=PATCH_Z, patch_y=PATCH_Y, patch_x=PATCH_X, save_dir=subgraphs_save_dir
+            volume, patch_z=pz, patch_y=py, patch_x=px, save_dir=subgraphs_save_dir
         )
         pbar.update(1)
 
         pbar.set_description("3/7 Build graph")
-        full_graph, centers, Ibar, count_pos, grid_shape = build_composite_voxel_graph(volume)
+        full_graph, centers, Ibar, count_pos, grid_shape = build_composite_voxel_graph(
+            volume, patch_z=pz, patch_y=py, patch_x=px
+        )
         M = full_graph.x.shape[0]
         logger.info("Composite-voxel graph: %d nodes, %d edges (8-neighbor), grid %s", M, full_graph.edge_index.shape[1], grid_shape)
         pbar.update(1)
@@ -784,6 +800,7 @@ def run_pipeline(
         positions = compute_interaction_scores(
             model, full_graph, centers, Ibar, count_pos, grid_shape, device,
             top_k=TOP_K_POSITIONS, top_p_percent=TOP_PERCENT,
+            coord_scale=coord_scale,
         )
         pbar.update(1)
 
@@ -792,7 +809,8 @@ def run_pipeline(
         "microenvironment": microenvironment_name,
         "channel_names": channel_names,
         "volume_shape": [int(C), int(Z), int(Y), int(X)],
-        "patch_shape": [PATCH_Z, PATCH_Y, PATCH_X],
+        "coord_scale": coord_scale,
+        "patch_shape": [pz, py, px],
         "intensity_threshold": INTENSITY_THRESHOLD,
         "roi_step": ROI_STEP,
         "subgraphs_dir": str(subgraphs_save_dir),
@@ -802,7 +820,7 @@ def run_pipeline(
         "positions": positions,
     }
     safe_name = microenvironment_name.replace(" ", "_").replace("/", "_")[:64]
-    out_path = Path(output_dir) / f"positions_{safe_name}.json"
+    out_path = Path(output_dir) / (positions_filename if positions_filename else f"positions_{safe_name}.json")
     with open(out_path, "w") as f:
         json.dump(_json_convert(out_data), f, indent=2)
     logger.info("Saved %d positions to %s", len(positions), out_path)

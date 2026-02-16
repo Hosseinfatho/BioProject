@@ -27,3 +27,6 @@ node_modules/
 
 
 VIS2026/Hi_res/Hi_res_dataset/data.npy
+/VIS2026/Hi_res/subgraphs_Hi_res_infal_2688_3456/Inflammation
+/VIS2026/Hi_res/NormalizedChannel_Hi_res_infal_2688_3456
+/VIS2026/Hi_res/preprocessed_Hi_res_infal_2688_3456

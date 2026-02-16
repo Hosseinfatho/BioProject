@@ -1,12 +1,12 @@
 {
   "shape": [
     194,
-    1024,
-    1024
+    512,
+    512
   ],
   "dataRange": [
     0.0,
-    14081.0
+    10880.0
   ],
   "downsampleFactor": 1,
   "channel": 3,
