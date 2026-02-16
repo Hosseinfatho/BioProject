@@ -341,12 +341,12 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     lodState.lastUpdate = now;
 
     const loadedChannels = loadedChannelsRef.current;
-    loadedChannels.forEach((entry, channelIndex) => {
+    loadedChannels.forEach((entry, key) => {
       if (!entry) return;
       if (entry.sampling === desiredSampling || entry.lastRequestedSampling === desiredSampling) return;
 
-      const channelData = channelDataCacheRef.current.get(channelIndex);
-      const channelConfig = channelConfigsRef.current.get(channelIndex);
+      const channelData = channelDataCacheRef.current.get(key);
+      const channelConfig = channelConfigsRef.current.get(key);
       if (!channelData || !channelConfig) return;
 
       const previousMesh = entry.mesh;
@@ -359,7 +359,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
         if (wasVisible && previousMesh) scene.remove(previousMesh);
         disposeMesh(previousMesh);
         removeMeshFromCollection(previousMesh, pointCloudsRef.current);
-        loadedChannels.delete(channelIndex);
+        loadedChannels.delete(key);
         return;
       }
 
@@ -372,7 +372,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
       }
 
       pointCloudsRef.current.push(mesh);
-      loadedChannels.set(channelIndex, { mesh, sampling, lastRequestedSampling: desiredSampling });
+      loadedChannels.set(key, { mesh, sampling, lastRequestedSampling: desiredSampling });
 
       if (wasVisible && channelConfig.visible !== false) {
         scene.add(mesh);
@@ -872,15 +872,16 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     let referenceData = null;
 
     for (const channel of visibleChannels) {
-      let data = channelDataCacheRef.current.get(channel.channelIndex);
+      const cacheKey = channel.id ?? channel.channelIndex;
+      let data = channelDataCacheRef.current.get(cacheKey);
 
       // If not in cache, try to fetch
       if (!data) {
         console.log(`Main_View: extractSelectedRegion - Data missing for channel ${channel.channelIndex}, fetching...`);
         try {
-          data = await loadChannelData(channel.channelIndex);
+          data = await loadChannelData(channel.channelIndex, { basePath: channel.channelBasePath });
           if (data) {
-            channelDataCacheRef.current.set(channel.channelIndex, data);
+            channelDataCacheRef.current.set(cacheKey, data);
           }
         } catch (err) {
           console.warn(`Main_View: extractSelectedRegion - Failed to fetch channel ${channel.channelIndex}`, err);
@@ -1598,16 +1599,18 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     const loadedChannels = loadedChannelsRef.current;
     const channelDataCache = channelDataCacheRef.current;
 
-    // Create a map of channel indices to their configs for quick lookup
-    const channelConfigMap = new Map();
+    // Map from (id ?? channelIndex) to config for lookup by loadedChannels key
+    const channelConfigByKey = new Map();
     channels.forEach((cfg) => {
-      channelConfigMap.set(cfg.channelIndex, cfg);
+      const k = cfg.id ?? cfg.channelIndex;
+      channelConfigByKey.set(k, cfg);
+      channelConfigByKey.set(cfg.channelIndex, cfg);
     });
 
     // First pass: Remove channels that are no longer in the list or are not visible
     let needsRender = false;
-    loadedChannels.forEach((entry, channelIndex) => {
-      const channelConfig = channelConfigMap.get(channelIndex);
+    loadedChannels.forEach((entry, key) => {
+      const channelConfig = channelConfigByKey.get(key) ?? channels.find((c) => (c.id ?? c.channelIndex) === key);
 
       if (!channelConfig) {
         // Channel completely removed from list - dispose everything
@@ -1618,9 +1621,9 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
         }
         disposeMesh(mesh);
         removeMeshFromCollection(mesh, pointCloudsRef.current);
-        loadedChannels.delete(channelIndex);
-        channelDataCache.delete(channelIndex);
-        console.log(`Main_View: 🗑️ Removed channel ${channelIndex} (no longer selected)`);
+        loadedChannels.delete(key);
+        channelDataCache.delete(key);
+        console.log(`Main_View: 🗑️ Removed channel (key=${key}) (no longer selected)`);
       } else {
         // Channel still exists - check visibility and remove from scene if not visible
         const isVisible = channelConfig.visible !== false;
@@ -1642,10 +1645,10 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     // Second pass: Update channel configs and handle visibility changes
     channels.forEach((channelConfig) => {
       const channelIndex = channelConfig.channelIndex;
-      channelConfigsRef.current.set(channelIndex, channelConfig);
-
-      const entry = loadedChannels.get(channelIndex);
-      const channelData = channelDataCache.get(channelIndex);
+      const key = channelConfig.id ?? channelIndex;
+      channelConfigsRef.current.set(key, channelConfig);
+      const entry = loadedChannels.get(key);
+      const channelData = channelDataCache.get(key);
       let mesh = entry?.mesh ?? null;
 
       const newSignature = getConfigSignature(channelConfig);
@@ -1657,8 +1660,8 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
         }
         disposeMesh(mesh);
         removeMeshFromCollection(mesh, pointCloudsRef.current);
-        loadedChannels.delete(channelIndex);
-        channelDataCache.delete(channelIndex);
+        loadedChannels.delete(key);
+        channelDataCache.delete(key);
         mesh = null;
         console.log(`Main_View:  Channel ${channelIndex} flagged for reload due to configuration change`);
       }
@@ -1681,7 +1684,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
 
     const loadChannels = async () => {
       const visibleChannels = channels.filter((cfg) => cfg.visible !== false);
-      const toLoad = visibleChannels.filter((cfg) => !loadedChannels.has(cfg.channelIndex));
+      const toLoad = visibleChannels.filter((cfg) => !loadedChannels.has(cfg.id ?? cfg.channelIndex));
       if (toLoad.length === 0) {
         renderScene();
         return;
@@ -1693,21 +1696,22 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
         if (channelConfig.visible === false) continue;
 
         try {
-          const currentConfig = channelConfigsRef.current.get(channelConfig.channelIndex);
+          const cacheKey = channelConfig.id ?? channelConfig.channelIndex;
+          const currentConfig = channelConfigsRef.current.get(cacheKey);
           if (!currentConfig || getConfigSignature(currentConfig) !== getConfigSignature(channelConfig)) {
             console.log(`Main_View:  Skipping stale load for channel ${channelConfig.channelIndex}`);
             continue;
           }
 
-          let channelData = channelDataCache.get(channelConfig.channelIndex);
+          let channelData = channelDataCache.get(cacheKey);
           if (!channelData) {
-            channelData = await loadChannelData(channelConfig.channelIndex);
+            channelData = await loadChannelData(channelConfig.channelIndex, { basePath: channelConfig.channelBasePath });
             if (channelData) {
-              channelDataCache.set(channelConfig.channelIndex, channelData);
+              channelDataCache.set(cacheKey, channelData);
             }
           }
 
-          const latestConfig = channelConfigsRef.current.get(channelConfig.channelIndex);
+          const latestConfig = channelConfigsRef.current.get(cacheKey);
           if (!latestConfig || getConfigSignature(latestConfig) !== getConfigSignature(channelConfig)) {
             console.log(`Main_View:  Loaded data discarded for channel ${channelConfig.channelIndex} (stale)`);
             continue;
@@ -1720,7 +1724,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
 
           if (result) {
             const { mesh, sampling } = result;
-            loadedChannels.set(channelConfig.channelIndex, {
+            loadedChannels.set(channelConfig.id ?? channelConfig.channelIndex, {
               mesh,
               sampling,
               lastRequestedSampling: desiredSampling,
@@ -1749,7 +1753,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
       }
 
       const visibleCount = visibleChannels.filter((cfg) => {
-        const entry = loadedChannels.get(cfg.channelIndex);
+        const entry = loadedChannels.get(cfg.id ?? cfg.channelIndex);
         return entry?.mesh && scene.children.includes(entry.mesh);
       }).length;
       console.log(`Main_View: Channel update complete. Visible ${visibleCount}/${visibleChannels.length}`);

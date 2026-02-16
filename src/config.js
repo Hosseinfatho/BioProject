@@ -1,5 +1,7 @@
 export const CONFIG = {
     VISUALIZATION_DATA_DIR: 'visualization_data',
+    /** Channel .raw + metadata from preparation_high_res.py (VIS2026/Hi_res/HI_res_channel) */
+    HI_RES_CHANNEL_DIR: 'VIS2026/Hi_res/HI_res_channel',
     DATA_DIR: 'Data',
     // ROI positions: path to output folder (relative to BASE_URL)
     POSITIONS_BASE: 'VIS2026/output',

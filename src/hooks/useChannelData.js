@@ -5,37 +5,38 @@ import { CONFIG } from '../config';
 const globalChannelCache = new Map();
 
 /**
+ * Cache key for channel data (index + optional basePath).
+ * @param {number} channelIndex
+ * @param {string} [basePath]
+ */
+function getCacheKey(channelIndex, basePath) {
+    return basePath ? `${basePath}:${channelIndex}` : String(channelIndex);
+}
+
+/**
  * Utility function to load channel data.
  * Can be used outside of React components or inside useEffects.
- * 
+ *
  * @param {number} channelIndex - The index of the channel to load.
+ * @param {{ basePath?: string }} [options] - Optional basePath (e.g. CONFIG.HI_RES_CHANNEL_DIR) to load from HI_res_channel.
  * @returns {Promise<{data: Uint8Array, metadata: Object}|null>}
  */
-export const loadChannelData = async (channelIndex) => {
+export const loadChannelData = async (channelIndex, options = {}) => {
     if (channelIndex === undefined || channelIndex === null) return null;
 
-    // Check cache first
-    if (globalChannelCache.has(channelIndex)) {
-        return globalChannelCache.get(channelIndex);
+    const basePath = options.basePath;
+    const cacheKey = getCacheKey(channelIndex, basePath);
+
+    if (globalChannelCache.has(cacheKey)) {
+        return globalChannelCache.get(cacheKey);
     }
 
+    const dir = basePath || CONFIG.VISUALIZATION_DATA_DIR;
     const paths = [
-        {
-            data: `./${CONFIG.VISUALIZATION_DATA_DIR}/channel_${channelIndex}_napari_data.raw`,
-            metadata: `./${CONFIG.VISUALIZATION_DATA_DIR}/channel_${channelIndex}_napari_metadata.json`
-        },
-        {
-            data: `${CONFIG.VISUALIZATION_DATA_DIR}/channel_${channelIndex}_napari_data.raw`,
-            metadata: `${CONFIG.VISUALIZATION_DATA_DIR}/channel_${channelIndex}_napari_metadata.json`
-        },
-        {
-            data: `./${CONFIG.VISUALIZATION_DATA_DIR}/channel_${channelIndex}_data.raw`,
-            metadata: `./${CONFIG.VISUALIZATION_DATA_DIR}/channel_${channelIndex}_metadata.json`
-        },
-        {
-            data: `${CONFIG.VISUALIZATION_DATA_DIR}/channel_${channelIndex}_data.raw`,
-            metadata: `${CONFIG.VISUALIZATION_DATA_DIR}/channel_${channelIndex}_metadata.json`
-        }
+        { data: `./${dir}/channel_${channelIndex}_napari_data.raw`, metadata: `./${dir}/channel_${channelIndex}_napari_metadata.json` },
+        { data: `${dir}/channel_${channelIndex}_napari_data.raw`, metadata: `${dir}/channel_${channelIndex}_napari_metadata.json` },
+        { data: `./${dir}/channel_${channelIndex}_data.raw`, metadata: `./${dir}/channel_${channelIndex}_metadata.json` },
+        { data: `${dir}/channel_${channelIndex}_data.raw`, metadata: `${dir}/channel_${channelIndex}_metadata.json` }
     ];
 
     for (const path of paths) {
@@ -61,18 +62,14 @@ export const loadChannelData = async (channelIndex) => {
             const data = new Uint8Array(arrayBuffer);
 
             const result = { data, metadata };
-
-            // Cache the result
-            globalChannelCache.set(channelIndex, result);
-
+            globalChannelCache.set(cacheKey, result);
             return result;
         } catch (error) {
-            // Continue to next path on error
             continue;
         }
     }
 
-    console.warn(`Failed to load data for channel ${channelIndex}`);
+    console.warn(`Failed to load data for channel ${channelIndex}${basePath ? ` (${basePath})` : ''}`);
     return null;
 };
 

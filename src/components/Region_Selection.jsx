@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import channelNamesData from '../channel_names.json';
+import { CONFIG } from '../config';
 
 // Microenvironments and channels aligned with 60_model.py / config (ROI positions)
 const REGION_DEFINITIONS = [
@@ -7,6 +8,18 @@ const REGION_DEFINITIONS = [
     id: 'inflammation',
     title: 'Inflammation',
     markers: ['MART1', 'MX1', 'IRF1', 'CD11c'],
+    palette: [
+      [27, 158, 119],
+      [217, 95, 2],
+      [117, 112, 179],
+      [231, 41, 138]
+    ]
+  },
+  {
+    id: 'inflammation_high_res',
+    title: 'Inflammation (High-res)',
+    markers: ['MART1', 'MX1', 'IRF1', 'CD11c'],
+    dataSource: 'hi_res',
     palette: [
       [27, 158, 119],
       [217, 95, 2],
@@ -160,28 +173,32 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
 
   const buildRegionPayload = (region) => {
     const topMarkers = region.markers.slice(0, 4);
+    const isHiRes = region.dataSource === 'hi_res';
+    const channelBasePath = isHiRes ? CONFIG.HI_RES_CHANNEL_DIR : undefined;
+
     const channelConfigs = topMarkers
       .map((marker, index) => {
-        const channelIndex = resolveChannelIndex(marker);
+        const channelIndex = isHiRes ? index : resolveChannelIndex(marker);
         const paletteColor = region.palette[index] || region.palette[region.palette.length - 1];
         const colorHex = Array.isArray(paletteColor)
           ? rgbToHex(paletteColor[0], paletteColor[1], paletteColor[2])
           : '#ffffff';
 
-        if (channelIndex === null || channelIndex === undefined) {
+        if (!isHiRes && (channelIndex === null || channelIndex === undefined)) {
           return null;
         }
 
         return {
           id: `${region.id}-${channelIndex ?? index}`,
-          channelIndex,
+          channelIndex: channelIndex ?? index,
           color: colorHex,
           thresholdMin: undefined,
           thresholdMax: undefined,
           opacity: 1,
           visible: true,
           markerName: marker,
-          regionId: region.id
+          regionId: region.id,
+          ...(channelBasePath && { channelBasePath })
         };
       })
       .filter(Boolean);

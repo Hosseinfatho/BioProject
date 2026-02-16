@@ -1,0 +1,15 @@
+{
+  "shape": [
+    194,
+    1024,
+    1024
+  ],
+  "dataRange": [
+    0.0,
+    14081.0
+  ],
+  "downsampleFactor": 1,
+  "channel": 3,
+  "channelName": "CD11c",
+  "source": "D:\\VIS2026\\Hossein\\BioProject\\VIS2026\\Hi_res\\Hi_res_dataset"
+}

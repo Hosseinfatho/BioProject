@@ -1,0 +1,45 @@
+{
+  "dataset_name": "Inflammation",
+  "channel_indices": [
+    3,
+    2,
+    31,
+    42
+  ],
+  "channel_names": [
+    "MART1",
+    "MX1",
+    "IRF1",
+    "CD11c"
+  ],
+  "shape": [
+    4,
+    194,
+    1024,
+    1024
+  ],
+  "dtype": ">u2",
+  "window": {
+    "x_center": 2688,
+    "y_center": 3456,
+    "x_slice": [
+      2176,
+      3200
+    ],
+    "y_slice": [
+      2944,
+      3968
+    ],
+    "z_slice": [
+      0,
+      194
+    ],
+    "full_volume": {
+      "x": 10908,
+      "y": 5508,
+      "z": 194
+    }
+  },
+  "source_url": "https://lsp-public-data.s3.amazonaws.com/biomedvis-challenge-2025/Dataset1-LSP13626-melanoma-in-situ/0",
+  "component": 0
+}

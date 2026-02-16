@@ -18,10 +18,12 @@ visualization_data/
 .idea/
 *.swp
 *.swo
-
+vis2026/data/hi_res/hi_res_channels/
 # OS
 .DS_Store
 Thumbs.db
 node_modules/
+*.raw
 
 
+VIS2026/Hi_res/Hi_res_dataset/data.npy

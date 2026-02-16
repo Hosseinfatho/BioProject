@@ -13,7 +13,7 @@ import requests
 import s3fs
 import ome_types
 
-SELECTED_DATASET = 2  # Set to 1 or 2 to use that dataset
+SELECTED_DATASET = 1  # Set to 1 or 2 to use that dataset
 
 # Dataset configuration (aligned with 00_data.py and 11_download_data.py)
 DATASETS = {

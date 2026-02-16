@@ -188,7 +188,7 @@ const Graph_Pannel = ({ selectedRegionData, selectedRegionsData, channels = [], 
       // Load all channel data in parallel
       const channelPromises = validChannels.map(async (channelConfig) => {
         try {
-          const channelData = await loadChannelData(channelConfig.channelIndex);
+          const channelData = await loadChannelData(channelConfig.channelIndex, { basePath: channelConfig.channelBasePath });
           if (!channelData) {
             console.warn(`Graph_Panel: Failed to load channel ${channelConfig.channelIndex}`);
             return null;

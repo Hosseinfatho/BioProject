@@ -1,761 +1,347 @@
 [
   {
     "name": "Hoechst",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 33959.0,
-    "mean": 734.6038465159742
+    "min": null,
+    "max": null
   },
   {
     "name": "5'hmC",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 42508.0,
-    "mean": 667.2876715513323
+    "min": null,
+    "max": null
   },
   {
     "name": "MX1",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 34412.0,
-    "mean": 158.08947022073377
+    "min": null,
+    "max": null
   },
   {
     "name": "MART1",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 32374.0,
-    "mean": 716.2301206984351
+    "min": null,
+    "max": null
   },
   {
     "name": "Hoechst",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 33951.0,
-    "mean": 367.8515612360807
+    "min": null,
+    "max": null
   },
   {
     "name": "CD3E (do not use)",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 32727.0,
-    "mean": 32.45726154668535
+    "min": null,
+    "max": null
   },
   {
     "name": "MHC-I",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 33112.0,
-    "mean": 226.62730609738688
+    "min": null,
+    "max": null
   },
   {
     "name": "SOX10",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 32436.0,
-    "mean": 111.72996105546844
+    "min": null,
+    "max": null
   },
   {
     "name": "Hoechst",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 31064.0,
-    "mean": 353.0989944454625
+    "min": null,
+    "max": null
   },
   {
     "name": "S100B",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 35877.0,
-    "mean": 413.1147933917556
+    "min": null,
+    "max": null
   },
   {
     "name": "MITF",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 28252.0,
-    "mean": 4.300389774345963
+    "min": null,
+    "max": null
   },
   {
     "name": "GranzymeB (do not use)",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 31383.0,
-    "mean": 367.28095973833484
+    "min": null,
+    "max": null
   },
   {
     "name": "Hoechst",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 33718.0,
-    "mean": 628.8872458494094
+    "min": null,
+    "max": null
   },
   {
     "name": "pan-cytokeratin",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 19733.0,
-    "mean": 50.96128043656751
+    "min": null,
+    "max": null
   },
   {
     "name": "lamin ABC",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 35071.0,
-    "mean": 140.4814256452284
+    "min": null,
+    "max": null
   },
   {
     "name": "PDL1",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 23623.0,
-    "mean": 61.73418981605688
+    "min": null,
+    "max": null
   },
   {
     "name": "Hoechst",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 33556.0,
-    "mean": 579.1244349664034
+    "min": null,
+    "max": null
   },
   {
     "name": "PD1 (do not use)",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 7998.0,
-    "mean": 7.818282846587855
+    "min": null,
+    "max": null
   },
   {
     "name": "S100A",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 33492.0,
-    "mean": 162.56028978963323
+    "min": null,
+    "max": null
   },
   {
     "name": "CD31",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 32811.0,
-    "mean": 47.819771480869164
+    "min": null,
+    "max": null
   },
   {
     "name": "Hoechst",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 31095.0,
-    "mean": 424.4553027787367
+    "min": null,
+    "max": null
   },
   {
     "name": "CD206",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 33568.0,
-    "mean": 43.880215395884186
+    "min": null,
+    "max": null
   },
   {
     "name": "pMLC2",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 33450.0,
-    "mean": 128.55690284039196
+    "min": null,
+    "max": null
   },
   {
     "name": "CD11b (do not use)",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 31155.0,
-    "mean": 153.70495003295366
+    "min": null,
+    "max": null
   },
   {
     "name": "Hoechst",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 30282.0,
-    "mean": 431.4373842699223
+    "min": null,
+    "max": null
   },
   {
     "name": "CD4",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 31366.0,
-    "mean": 62.61274801291014
+    "min": null,
+    "max": null
   },
   {
     "name": "LAG3",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 32559.0,
-    "mean": 36.7173058797207
+    "min": null,
+    "max": null
   },
   {
     "name": "CD20",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 31993.0,
-    "mean": 28.584535158658408
+    "min": null,
+    "max": null
   },
   {
     "name": "Hoechst",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 17417.0,
-    "mean": 300.04097151002634
+    "min": null,
+    "max": null
   },
   {
     "name": "PRAME",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 27873.0,
-    "mean": 174.89743451284787
+    "min": null,
+    "max": null
   },
   {
     "name": "CD163",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 30249.0,
-    "mean": 81.10252053655223
+    "min": null,
+    "max": null
   },
   {
     "name": "IRF1",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 28758.0,
-    "mean": 227.47414717879303
+    "min": null,
+    "max": null
   },
   {
     "name": "Hoechst",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 15899.0,
-    "mean": 255.2968592919673
+    "min": null,
+    "max": null
   },
   {
     "name": "B-catenin",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 27320.0,
-    "mean": 66.29351648340523
+    "min": null,
+    "max": null
   },
   {
     "name": "CD3E",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 30416.0,
-    "mean": 31.71920683957799
+    "min": null,
+    "max": null
   },
   {
     "name": "CD8a",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 29956.0,
-    "mean": 48.173401672081326
+    "min": null,
+    "max": null
   },
   {
     "name": "Hoechst",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 21979.0,
-    "mean": 250.50023053633961
+    "min": null,
+    "max": null
   },
   {
     "name": "CD11b",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 32018.0,
-    "mean": 10.927932444512837
+    "min": null,
+    "max": null
   },
   {
     "name": "FOXP3",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 32445.0,
-    "mean": 11.236452468790212
+    "min": null,
+    "max": null
   },
   {
     "name": "PD1",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 31861.0,
-    "mean": 58.8088838431953
+    "min": null,
+    "max": null
   },
   {
     "name": "Hoechst",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 18737.0,
-    "mean": 251.9182940462728
+    "min": null,
+    "max": null
   },
   {
     "name": "Ki67",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 31945.0,
-    "mean": 21.29959083817683
+    "min": null,
+    "max": null
   },
   {
     "name": "CD11c",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 25133.0,
-    "mean": 36.78369410661189
+    "min": null,
+    "max": null
   },
   {
     "name": "COX-IV",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 28756.0,
-    "mean": 167.1740562272273
+    "min": null,
+    "max": null
   },
   {
     "name": "Hoechst",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 15955.0,
-    "mean": 214.36890441011954
+    "min": null,
+    "max": null
   },
   {
     "name": "lysozyme C",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 23179.0,
-    "mean": 11.303732304497794
+    "min": null,
+    "max": null
   },
   {
     "name": "SOX9",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 31563.0,
-    "mean": 33.093224886636406
+    "min": null,
+    "max": null
   },
   {
     "name": "PMEL",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 31623.0,
-    "mean": 57.95972527489215
+    "min": null,
+    "max": null
   },
   {
     "name": "CD103",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 31987.0,
-    "mean": 71.7912193457663
+    "min": null,
+    "max": null
   },
   {
     "name": "Hoechst",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 32537.0,
-    "mean": 909.1861199457151
+    "min": null,
+    "max": null
   },
   {
     "name": "CyclinD1",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 31272.0,
-    "mean": 61.520529250286764
+    "min": null,
+    "max": null
   },
   {
     "name": "BAF1",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 32613.0,
-    "mean": 29.989534065265435
+    "min": null,
+    "max": null
   },
   {
     "name": "Hoechst",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 18332.0,
-    "mean": 243.36176257984047
+    "min": null,
+    "max": null
   },
   {
     "name": "B-actin",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 32964.0,
-    "mean": 101.69187026892405
+    "min": null,
+    "max": null
   },
   {
     "name": "mast cell tryptase",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 16250.0,
-    "mean": 2.5080393616407375
+    "min": null,
+    "max": null
   },
   {
     "name": "CD15",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 8644.0,
-    "mean": 4.65679605740718
+    "min": null,
+    "max": null
   },
   {
     "name": "Podoplanin",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 32513.0,
-    "mean": 49.01370855357271
+    "min": null,
+    "max": null
   },
   {
     "name": "Hoechst",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 26774.0,
-    "mean": 421.0098999393572
+    "min": null,
+    "max": null
   },
   {
     "name": "B-tubulin",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 33542.0,
-    "mean": 190.35039965790975
+    "min": null,
+    "max": null
   },
   {
     "name": "Catalase",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 32829.0,
-    "mean": 21.32346823744041
+    "min": null,
+    "max": null
   },
   {
     "name": "y-H2AX",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 32328.0,
-    "mean": 17.284766745363964
+    "min": null,
+    "max": null
   },
   {
     "name": "Hoechst",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 19081.0,
-    "mean": 326.19356267419624
+    "min": null,
+    "max": null
   },
   {
     "name": "E-cadherin",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 34092.0,
-    "mean": 119.29946765429749
+    "min": null,
+    "max": null
   },
   {
     "name": "Vimentin",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 14153.0,
-    "mean": 32.40895882413685
+    "min": null,
+    "max": null
   },
   {
     "name": "Neurofilament L",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 10177.0,
-    "mean": 24.601280952891972
+    "min": null,
+    "max": null
   },
   {
     "name": "Granzyme B",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 31355.0,
-    "mean": 5.106509256887616
+    "min": null,
+    "max": null
   },
   {
     "name": "Hoechst",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 24903.0,
-    "mean": 443.7894061484119
+    "min": null,
+    "max": null
   },
   {
     "name": "MHC-II",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 32987.0,
-    "mean": 168.36642358499256
+    "min": null,
+    "max": null
   },
   {
     "name": "H3K27me3",
-    "dimension": [
-      194,
-      599,
-      680
-    ],
-    "min": 0.0,
-    "max": 16333.0,
-    "mean": 68.2049496406483
+    "min": null,
+    "max": null
   }
 ]
