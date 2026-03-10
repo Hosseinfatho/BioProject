@@ -110,7 +110,7 @@ PATCH_X = 16
 # Ibar: sum of normalized voxel values > INTENSITY_THRESHOLD over all channels in each composite voxel.
 # avg_term = Ibar / count_pos where count_pos = number of voxels > threshold.
 INTENSITY_THRESHOLD = 0.05
-# ROI: 8 neighbors in (x,y) plane; ROI centers step by ROI_STEP and must be 1 away from border.
+# ROI: 8 neighbors in (x,y) plane; ROI centers step by ROI_STEP over full grid (include border; border nodes have fewer neighbors).
 ROI_STEP = 3
 
 # Training
@@ -124,6 +124,12 @@ DROPOUT = 0.1
 TOP_K_POSITIONS = 2000
 # Node-level score: Score_r^(k)(i) = max{ i_ij^(k) }; optionally take top p% of voxels (paper default 5%).
 TOP_PERCENT = 100.0  # top p% by Score_r^(k)(i); used if > 0 to limit output size
+# Saliency auxiliary loss: train saliency head to align with normalized Ibar (node feature index 3) for distributed saliency
+SALIENCY_LOSS_WEIGHT = 0.5
+IBAR_FEATURE_INDEX = 3  # node feature x[:, 3] = Ibar in composite-voxel graph
+# Distance weight in combined score: score = (I/max_I)*(S/max_S)*(DISTANCE_WEIGHT_SCORE + (1-DISTANCE_WEIGHT_SCORE)*distance_factor).
+# Lower value => intensity and saliency dominate (higher intensity/saliency => higher score more clearly).
+DISTANCE_WEIGHT_SCORE = 0.35  # 0.35 so distance factor range is [0.35, 1]; intensity*saliency matter more
 
 
 def microenvironment_to_filename(name: str) -> str:
@@ -565,6 +571,18 @@ def train_model(
             z1 = out1[0]
             z2 = out2[0]
             loss = contrastive_loss(z1, z2)
+
+            # Auxiliary saliency loss: align saliency with Ibar (per-graph max-normalized) for distributed saliency
+            if hasattr(model, "saliency_head") and b1.x.shape[1] > IBAR_FEATURE_INDEX:
+                def _saliency_loss(batch_data, out):
+                    ibar = batch_data.x[:, IBAR_FEATURE_INDEX : IBAR_FEATURE_INDEX + 1]
+                    gmax = global_max_pool(ibar, batch_data.batch)
+                    ibar_norm = ibar / (gmax[batch_data.batch] + 1e-12)
+                    sal = out[1].squeeze(1)
+                    return F.mse_loss(sal, ibar_norm.squeeze(1))
+                loss_sal = (_saliency_loss(b1, out1) + _saliency_loss(b2, out2)) * 0.5
+                loss = loss + SALIENCY_LOSS_WEIGHT * loss_sal
+
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -589,13 +607,14 @@ def compute_interaction_scores(
     coord_scale: int = 16,
 ) -> List[Dict[str, Any]]:
     """
-    ROI scoring:
-      Ibar_i = sum of voxel values > 0.05 over all channels in composite i.
-      avg_term_i = Ibar_i / count_pos_i (count_pos = number of voxels > 0.05).
-      s_i = Ibar_i (used in pairwise score).
-      i_ij = (s_i + s_j) * (avg_term_i + avg_term_j) * w_ij; return neighbor j coords with each i_ij.
-      S_ROI(i) = Ibar_i + sum(Ibar_j for j in 8 neighbors).
-    ROI centers: step by ROI_STEP in (iy, ix), valid when 1 <= iy <= ny-2, 1 <= ix <= nx-2.
+    ROI scoring (combined): higher intensity, higher saliency, lower distance to volume center => higher score.
+      roi_avg_intensity = mean Ibar over ROI (center + 8 neighbors).
+      roi_avg_saliency = mean saliency over ROI.
+      distance = Euclidean distance from ROI center to volume center.
+      distance_factor = 1 / (1 + distance / max_dist); distance_term = DISTANCE_WEIGHT_SCORE + (1 - DISTANCE_WEIGHT_SCORE)*distance_factor.
+      ROI score = (roi_avg_intensity / max_I) * (roi_avg_saliency / max_S) * distance_term (intensity and saliency dominate).
+      intensity_average_norm and saliency_average_norm: rank-based (percentile) over ROIs for diverse [0,1] display.
+    ROI centers: step by ROI_STEP in (iy, ix); (gj-1)%step==0, (gk-1)%step==0.
     """
     nz, ny, nx = grid_shape
     M = centers.shape[0]
@@ -608,13 +627,13 @@ def compute_interaction_scores(
         gk = rest % nx
         return gi, gj, gk
 
-    # ROI center indices: (g_iy, g_ix) in [1, ny-2] and [1, nx-2], step 3; all g_iz
+    # ROI center indices: all (g_iy, g_ix) in [0, ny-1] x [0, nx-1] with step 3: (gj-1)%step==0, (gk-1)%step==0; all g_iz (include border)
     roi_center_indices = []
     for gi in range(nz):
-        for gj in range(1, ny - 1):
+        for gj in range(0, ny):
             if (gj - 1) % step != 0:
                 continue
-            for gk in range(1, nx - 1):
+            for gk in range(0, nx):
                 if (gk - 1) % step != 0:
                     continue
                 idx = gi * (ny * nx) + gj * nx + gk
@@ -642,7 +661,9 @@ def compute_interaction_scores(
     s = Ibar.copy()
     avg_term = np.maximum(Ibar / count_pos, 1e-12)
 
-    # Optional: GAT saliency per node for roi_avg_saliency (average saliency in whole ROI)
+    # Optional: GAT saliency per node for roi_avg_saliency (average saliency in whole ROI).
+    # Saliency head is not trained (only contrastive loss on projection), so it often outputs
+    # nearly constant values; when variance is negligible, use Ibar as proxy so ROIs get distinct values.
     saliency_per_node = None
     try:
         x = full_graph.x.to(device)
@@ -656,12 +677,22 @@ def compute_interaction_scores(
         pass
     if saliency_per_node is None:
         saliency_per_node = Ibar.copy()
+        logger.info("Saliency from model failed; using Ibar as saliency proxy.")
+    else:
+        if np.std(saliency_per_node) < 1e-6:
+            saliency_per_node = Ibar.copy()
+            logger.info("Saliency from model was constant (head untrained); using Ibar as saliency proxy.")
+
+    # Normalize saliency to [0, 1] for use in score formula (so it modulates score consistently)
+    sal_max = float(np.max(saliency_per_node)) + 1e-12
+    saliency_norm = np.asarray(saliency_per_node, dtype=np.float64) / sal_max
 
     results = []
     roi_scores = []
     for idx in tqdm(roi_center_indices, desc="ROI scoring", unit="roi"):
         s_i = s[idx]
         a_i = avg_term[idx]
+        sal_norm_i = float(saliency_norm[idx])
         roi_sum = Ibar[idx]
         saliency_sum = float(saliency_per_node[idx])
         neighbor_list = []
@@ -669,9 +700,11 @@ def compute_interaction_scores(
         for j, w_ij in neighbors[idx]:
             s_j = s[j]
             a_j = avg_term[j]
+            sal_norm_j = float(saliency_norm[j])
             roi_sum += Ibar[j]
             saliency_sum += saliency_per_node[j]
-            i_ij = (s_i + s_j) * (a_i + a_j) * w_ij
+            # i_ij includes saliency: higher saliency pair => higher score. Factor (1 + sal_norm_i + sal_norm_j)/2 in [0.5, 1.5]
+            i_ij = (s_i + s_j) * (a_i + a_j) * w_ij * (1.0 + sal_norm_i + sal_norm_j) * 0.5
             if i_ij > best_i_ij:
                 best_i_ij = i_ij
             iz_j, iy_j, ix_j = int(centers[j, 0]), int(centers[j, 1]), int(centers[j, 2])
@@ -686,13 +719,27 @@ def compute_interaction_scores(
         roi_avg_saliency = saliency_sum / n_roi
         roi_scores.append((best_i_ij, idx, roi_sum, neighbor_list, roi_avg_intensity, roi_avg_saliency))
 
+    # Combined score: higher intensity + higher saliency + lower distance to volume center => higher score
+    vol_center = np.array([
+        (centers[:, 0].min() + centers[:, 0].max()) * 0.5,
+        (centers[:, 1].min() + centers[:, 1].max()) * 0.5,
+        (centers[:, 2].min() + centers[:, 2].max()) * 0.5,
+    ], dtype=np.float64)
+    max_dist = np.max(np.linalg.norm(centers - vol_center, axis=1)) + 1e-12
+    max_I = max((t[4] for t in roi_scores), default=1e-12) + 1e-12
+    max_S = max((t[5] for t in roi_scores), default=1e-12) + 1e-12
+    # So that higher intensity and saliency dominate: distance contributes only part of the score (DISTANCE_WEIGHT_SCORE)
+    d_weight = DISTANCE_WEIGHT_SCORE
+    scored = []
+    for (_, idx, roi_sum, neighbor_list, roi_avg_intensity, roi_avg_saliency) in roi_scores:
+        dist = np.linalg.norm(centers[idx] - vol_center)
+        distance_factor = 1.0 / (1.0 + dist / max_dist)
+        distance_term = d_weight + (1.0 - d_weight) * distance_factor
+        combined_score = (float(roi_avg_intensity) / max_I) * (float(roi_avg_saliency) / max_S) * distance_term
+        scored.append((combined_score, idx, roi_sum, neighbor_list, roi_avg_intensity, roi_avg_saliency))
+    roi_scores = scored
     roi_scores.sort(key=lambda t: -t[0])
-    # Normalize to [0, 1] by max over all ROIs (3 decimal places)
-    max_roi_intensity = max((t[4] for t in roi_scores), default=1e-12)
-    max_roi_saliency = max((t[5] for t in roi_scores), default=1e-12)
     max_score = max((t[0] for t in roi_scores), default=1e-12)
-    max_roi_intensity = max(max_roi_intensity, 1e-12)
-    max_roi_saliency = max(max_roi_saliency, 1e-12)
     max_score = max(max_score, 1e-12)
 
     n_take = len(roi_scores)
@@ -702,10 +749,21 @@ def compute_interaction_scores(
         n_take = min(n_take, top_k)
     roi_scores = roi_scores[:n_take]
 
+    # Rank-based (percentile) normalization so values are spread across [0, 1] for diverse, informative display
+    roi_intensities = np.array([t[4] for t in roi_scores], dtype=np.float64)
+    roi_saliencies = np.array([t[5] for t in roi_scores], dtype=np.float64)
+    # rank 0..n-1 by value (smallest=0, largest=n-1); ties broken by order
+    rank_intensity = np.argsort(np.argsort(roi_intensities))
+    rank_saliency = np.argsort(np.argsort(roi_saliencies))
+    denom = max(n_take - 1, 1)
+    intensity_norm_by_rank = np.round(np.clip(rank_intensity / denom, 0.0, 1.0), 3)
+    saliency_norm_by_rank = np.round(np.clip(rank_saliency / denom, 0.0, 1.0), 3)
+
     for rank, (score_val, idx, _roi_sum, _neighbor_list, roi_avg_intensity, roi_avg_saliency) in enumerate(roi_scores, start=1):
         iz, iy, ix = int(centers[idx, 0]), int(centers[idx, 1]), int(centers[idx, 2])
-        intensity_average_norm = round(min(1.0, float(roi_avg_intensity) / max_roi_intensity), 3)
-        saliency_average_norm = round(min(1.0, float(roi_avg_saliency) / max_roi_saliency), 3)
+        i = rank - 1
+        intensity_average_norm = float(intensity_norm_by_rank[i])
+        saliency_average_norm = float(saliency_norm_by_rank[i])
         score_norm = round(min(1.0, float(score_val) / max_score), 3)
         results.append({
             "id": rank,
@@ -716,6 +774,10 @@ def compute_interaction_scores(
             "saliency_average_norm": saliency_average_norm,
             "score_norm": score_norm,
         })
+    # Ensure output is sorted descending by score_norm (high to low); reassign id 1, 2, ...
+    results.sort(key=lambda p: -p["score_norm"])
+    for rank, pos in enumerate(results, start=1):
+        pos["id"] = rank
     return results
 
 
@@ -815,7 +877,7 @@ def run_pipeline(
         "roi_step": ROI_STEP,
         "subgraphs_dir": str(subgraphs_save_dir),
         "num_composite_voxels": M,
-        "score_definition": "Ibar_i = sum of voxel values > 0.05 over channels; avg_term_i = Ibar_i/count_pos_i; i_ij = (s_i+s_j)*(avg_term_i+avg_term_j)*w_ij; S_ROI(i) = Ibar_i + sum(Ibar_j); 8-neighbor ROI, step 3",
+        "score_definition": "ROI score = (intensity/max_I)*(saliency/max_S)*distance_term; distance_term = 0.35+0.65*distance_factor, distance_factor = 1/(1+dist/max_dist); intensity and saliency weighted more than distance; 8-neighbor ROI, step 3",
         "top_p_percent": TOP_PERCENT,
         "positions": positions,
     }

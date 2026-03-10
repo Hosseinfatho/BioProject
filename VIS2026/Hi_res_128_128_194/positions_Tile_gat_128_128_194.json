@@ -1,0 +1,1082 @@
+{
+  "microenvironment": "Inflammation",
+  "channel_names": [
+    "MART1",
+    "MX1",
+    "IRF1",
+    "CD11c"
+  ],
+  "volume_shape": [
+    4,
+    194,
+    128,
+    128
+  ],
+  "coord_scale": 1,
+  "patch_shape": [
+    16,
+    16,
+    16
+  ],
+  "intensity_threshold": 0.05,
+  "roi_step": 3,
+  "subgraphs_dir": "D:\\VIS2026\\Hossein\\BioProject\\VIS2026\\Hi_res_128_128_194\\subgraphs_Tile_gat_128_128_194\\Inflammation",
+  "num_composite_voxels": 832,
+  "score_definition": "ROI score = (intensity/max_I)*(saliency/max_S)*distance_term; distance_term = 0.35+0.65*distance_factor, distance_factor = 1/(1+dist/max_dist); intensity and saliency weighted more than distance; 8-neighbor ROI, step 3",
+  "top_p_percent": 100.0,
+  "positions": [
+    {
+      "id": 1,
+      "x": 72,
+      "y": 24,
+      "z": 88,
+      "intensity_average_norm": 0.974,
+      "saliency_average_norm": 0.276,
+      "score_norm": 1.0
+    },
+    {
+      "id": 2,
+      "x": 120,
+      "y": 24,
+      "z": 104,
+      "intensity_average_norm": 1.0,
+      "saliency_average_norm": 0.672,
+      "score_norm": 0.997
+    },
+    {
+      "id": 3,
+      "x": 120,
+      "y": 72,
+      "z": 88,
+      "intensity_average_norm": 0.991,
+      "saliency_average_norm": 0.629,
+      "score_norm": 0.996
+    },
+    {
+      "id": 4,
+      "x": 72,
+      "y": 72,
+      "z": 88,
+      "intensity_average_norm": 0.897,
+      "saliency_average_norm": 0.491,
+      "score_norm": 0.989
+    },
+    {
+      "id": 5,
+      "x": 120,
+      "y": 24,
+      "z": 88,
+      "intensity_average_norm": 0.983,
+      "saliency_average_norm": 0.302,
+      "score_norm": 0.943
+    },
+    {
+      "id": 6,
+      "x": 120,
+      "y": 72,
+      "z": 104,
+      "intensity_average_norm": 0.966,
+      "saliency_average_norm": 0.552,
+      "score_norm": 0.932
+    },
+    {
+      "id": 7,
+      "x": 72,
+      "y": 24,
+      "z": 104,
+      "intensity_average_norm": 0.931,
+      "saliency_average_norm": 0.284,
+      "score_norm": 0.93
+    },
+    {
+      "id": 8,
+      "x": 72,
+      "y": 120,
+      "z": 88,
+      "intensity_average_norm": 0.922,
+      "saliency_average_norm": 0.741,
+      "score_norm": 0.873
+    },
+    {
+      "id": 9,
+      "x": 120,
+      "y": 24,
+      "z": 120,
+      "intensity_average_norm": 0.948,
+      "saliency_average_norm": 0.457,
+      "score_norm": 0.869
+    },
+    {
+      "id": 10,
+      "x": 120,
+      "y": 120,
+      "z": 88,
+      "intensity_average_norm": 0.957,
+      "saliency_average_norm": 0.759,
+      "score_norm": 0.863
+    },
+    {
+      "id": 11,
+      "x": 24,
+      "y": 120,
+      "z": 88,
+      "intensity_average_norm": 0.94,
+      "saliency_average_norm": 0.681,
+      "score_norm": 0.859
+    },
+    {
+      "id": 12,
+      "x": 24,
+      "y": 72,
+      "z": 104,
+      "intensity_average_norm": 0.879,
+      "saliency_average_norm": 0.534,
+      "score_norm": 0.857
+    },
+    {
+      "id": 13,
+      "x": 72,
+      "y": 120,
+      "z": 104,
+      "intensity_average_norm": 0.888,
+      "saliency_average_norm": 0.621,
+      "score_norm": 0.832
+    },
+    {
+      "id": 14,
+      "x": 24,
+      "y": 72,
+      "z": 88,
+      "intensity_average_norm": 0.871,
+      "saliency_average_norm": 0.517,
+      "score_norm": 0.828
+    },
+    {
+      "id": 15,
+      "x": 24,
+      "y": 120,
+      "z": 104,
+      "intensity_average_norm": 0.905,
+      "saliency_average_norm": 0.75,
+      "score_norm": 0.825
+    },
+    {
+      "id": 16,
+      "x": 72,
+      "y": 72,
+      "z": 104,
+      "intensity_average_norm": 0.776,
+      "saliency_average_norm": 0.388,
+      "score_norm": 0.823
+    },
+    {
+      "id": 17,
+      "x": 120,
+      "y": 120,
+      "z": 104,
+      "intensity_average_norm": 0.914,
+      "saliency_average_norm": 0.647,
+      "score_norm": 0.811
+    },
+    {
+      "id": 18,
+      "x": 72,
+      "y": 24,
+      "z": 120,
+      "intensity_average_norm": 0.845,
+      "saliency_average_norm": 0.328,
+      "score_norm": 0.786
+    },
+    {
+      "id": 19,
+      "x": 72,
+      "y": 72,
+      "z": 72,
+      "intensity_average_norm": 0.784,
+      "saliency_average_norm": 0.603,
+      "score_norm": 0.76
+    },
+    {
+      "id": 20,
+      "x": 72,
+      "y": 120,
+      "z": 120,
+      "intensity_average_norm": 0.853,
+      "saliency_average_norm": 0.716,
+      "score_norm": 0.754
+    },
+    {
+      "id": 21,
+      "x": 24,
+      "y": 72,
+      "z": 136,
+      "intensity_average_norm": 0.828,
+      "saliency_average_norm": 0.5,
+      "score_norm": 0.748
+    },
+    {
+      "id": 22,
+      "x": 24,
+      "y": 120,
+      "z": 120,
+      "intensity_average_norm": 0.862,
+      "saliency_average_norm": 0.767,
+      "score_norm": 0.745
+    },
+    {
+      "id": 23,
+      "x": 120,
+      "y": 72,
+      "z": 120,
+      "intensity_average_norm": 0.836,
+      "saliency_average_norm": 0.509,
+      "score_norm": 0.741
+    },
+    {
+      "id": 24,
+      "x": 24,
+      "y": 72,
+      "z": 120,
+      "intensity_average_norm": 0.793,
+      "saliency_average_norm": 0.578,
+      "score_norm": 0.732
+    },
+    {
+      "id": 25,
+      "x": 72,
+      "y": 72,
+      "z": 120,
+      "intensity_average_norm": 0.707,
+      "saliency_average_norm": 0.466,
+      "score_norm": 0.732
+    },
+    {
+      "id": 26,
+      "x": 120,
+      "y": 72,
+      "z": 72,
+      "intensity_average_norm": 0.802,
+      "saliency_average_norm": 0.56,
+      "score_norm": 0.699
+    },
+    {
+      "id": 27,
+      "x": 24,
+      "y": 72,
+      "z": 72,
+      "intensity_average_norm": 0.759,
+      "saliency_average_norm": 0.698,
+      "score_norm": 0.696
+    },
+    {
+      "id": 28,
+      "x": 120,
+      "y": 120,
+      "z": 120,
+      "intensity_average_norm": 0.819,
+      "saliency_average_norm": 0.724,
+      "score_norm": 0.69
+    },
+    {
+      "id": 29,
+      "x": 72,
+      "y": 24,
+      "z": 72,
+      "intensity_average_norm": 0.733,
+      "saliency_average_norm": 0.543,
+      "score_norm": 0.678
+    },
+    {
+      "id": 30,
+      "x": 120,
+      "y": 120,
+      "z": 136,
+      "intensity_average_norm": 0.81,
+      "saliency_average_norm": 0.595,
+      "score_norm": 0.674
+    },
+    {
+      "id": 31,
+      "x": 72,
+      "y": 120,
+      "z": 136,
+      "intensity_average_norm": 0.741,
+      "saliency_average_norm": 0.612,
+      "score_norm": 0.648
+    },
+    {
+      "id": 32,
+      "x": 24,
+      "y": 120,
+      "z": 72,
+      "intensity_average_norm": 0.767,
+      "saliency_average_norm": 0.733,
+      "score_norm": 0.646
+    },
+    {
+      "id": 33,
+      "x": 24,
+      "y": 24,
+      "z": 88,
+      "intensity_average_norm": 0.716,
+      "saliency_average_norm": 0.474,
+      "score_norm": 0.646
+    },
+    {
+      "id": 34,
+      "x": 120,
+      "y": 24,
+      "z": 72,
+      "intensity_average_norm": 0.75,
+      "saliency_average_norm": 0.448,
+      "score_norm": 0.641
+    },
+    {
+      "id": 35,
+      "x": 24,
+      "y": 120,
+      "z": 136,
+      "intensity_average_norm": 0.724,
+      "saliency_average_norm": 0.69,
+      "score_norm": 0.624
+    },
+    {
+      "id": 36,
+      "x": 24,
+      "y": 24,
+      "z": 104,
+      "intensity_average_norm": 0.69,
+      "saliency_average_norm": 0.362,
+      "score_norm": 0.613
+    },
+    {
+      "id": 37,
+      "x": 24,
+      "y": 24,
+      "z": 120,
+      "intensity_average_norm": 0.664,
+      "saliency_average_norm": 0.379,
+      "score_norm": 0.593
+    },
+    {
+      "id": 38,
+      "x": 120,
+      "y": 72,
+      "z": 136,
+      "intensity_average_norm": 0.681,
+      "saliency_average_norm": 0.336,
+      "score_norm": 0.585
+    },
+    {
+      "id": 39,
+      "x": 72,
+      "y": 120,
+      "z": 72,
+      "intensity_average_norm": 0.655,
+      "saliency_average_norm": 0.664,
+      "score_norm": 0.58
+    },
+    {
+      "id": 40,
+      "x": 24,
+      "y": 24,
+      "z": 72,
+      "intensity_average_norm": 0.647,
+      "saliency_average_norm": 0.638,
+      "score_norm": 0.576
+    },
+    {
+      "id": 41,
+      "x": 120,
+      "y": 120,
+      "z": 152,
+      "intensity_average_norm": 0.698,
+      "saliency_average_norm": 0.293,
+      "score_norm": 0.567
+    },
+    {
+      "id": 42,
+      "x": 24,
+      "y": 72,
+      "z": 152,
+      "intensity_average_norm": 0.638,
+      "saliency_average_norm": 0.319,
+      "score_norm": 0.563
+    },
+    {
+      "id": 43,
+      "x": 72,
+      "y": 72,
+      "z": 136,
+      "intensity_average_norm": 0.603,
+      "saliency_average_norm": 0.397,
+      "score_norm": 0.562
+    },
+    {
+      "id": 44,
+      "x": 24,
+      "y": 120,
+      "z": 152,
+      "intensity_average_norm": 0.672,
+      "saliency_average_norm": 0.526,
+      "score_norm": 0.554
+    },
+    {
+      "id": 45,
+      "x": 120,
+      "y": 24,
+      "z": 136,
+      "intensity_average_norm": 0.629,
+      "saliency_average_norm": 0.431,
+      "score_norm": 0.533
+    },
+    {
+      "id": 46,
+      "x": 24,
+      "y": 24,
+      "z": 136,
+      "intensity_average_norm": 0.612,
+      "saliency_average_norm": 0.345,
+      "score_norm": 0.53
+    },
+    {
+      "id": 47,
+      "x": 120,
+      "y": 120,
+      "z": 72,
+      "intensity_average_norm": 0.621,
+      "saliency_average_norm": 0.655,
+      "score_norm": 0.519
+    },
+    {
+      "id": 48,
+      "x": 72,
+      "y": 24,
+      "z": 136,
+      "intensity_average_norm": 0.586,
+      "saliency_average_norm": 0.414,
+      "score_norm": 0.506
+    },
+    {
+      "id": 49,
+      "x": 72,
+      "y": 120,
+      "z": 152,
+      "intensity_average_norm": 0.595,
+      "saliency_average_norm": 0.31,
+      "score_norm": 0.489
+    },
+    {
+      "id": 50,
+      "x": 72,
+      "y": 24,
+      "z": 152,
+      "intensity_average_norm": 0.578,
+      "saliency_average_norm": 0.233,
+      "score_norm": 0.467
+    },
+    {
+      "id": 51,
+      "x": 120,
+      "y": 72,
+      "z": 152,
+      "intensity_average_norm": 0.569,
+      "saliency_average_norm": 0.259,
+      "score_norm": 0.448
+    },
+    {
+      "id": 52,
+      "x": 24,
+      "y": 24,
+      "z": 152,
+      "intensity_average_norm": 0.56,
+      "saliency_average_norm": 0.241,
+      "score_norm": 0.397
+    },
+    {
+      "id": 53,
+      "x": 72,
+      "y": 72,
+      "z": 152,
+      "intensity_average_norm": 0.552,
+      "saliency_average_norm": 0.267,
+      "score_norm": 0.391
+    },
+    {
+      "id": 54,
+      "x": 24,
+      "y": 72,
+      "z": 56,
+      "intensity_average_norm": 0.543,
+      "saliency_average_norm": 0.784,
+      "score_norm": 0.381
+    },
+    {
+      "id": 55,
+      "x": 72,
+      "y": 72,
+      "z": 56,
+      "intensity_average_norm": 0.491,
+      "saliency_average_norm": 0.828,
+      "score_norm": 0.375
+    },
+    {
+      "id": 56,
+      "x": 72,
+      "y": 24,
+      "z": 56,
+      "intensity_average_norm": 0.517,
+      "saliency_average_norm": 0.81,
+      "score_norm": 0.368
+    },
+    {
+      "id": 57,
+      "x": 24,
+      "y": 24,
+      "z": 56,
+      "intensity_average_norm": 0.534,
+      "saliency_average_norm": 0.776,
+      "score_norm": 0.357
+    },
+    {
+      "id": 58,
+      "x": 120,
+      "y": 72,
+      "z": 56,
+      "intensity_average_norm": 0.509,
+      "saliency_average_norm": 0.853,
+      "score_norm": 0.354
+    },
+    {
+      "id": 59,
+      "x": 24,
+      "y": 120,
+      "z": 56,
+      "intensity_average_norm": 0.526,
+      "saliency_average_norm": 0.793,
+      "score_norm": 0.347
+    },
+    {
+      "id": 60,
+      "x": 120,
+      "y": 24,
+      "z": 56,
+      "intensity_average_norm": 0.5,
+      "saliency_average_norm": 0.879,
+      "score_norm": 0.341
+    },
+    {
+      "id": 61,
+      "x": 72,
+      "y": 120,
+      "z": 56,
+      "intensity_average_norm": 0.474,
+      "saliency_average_norm": 0.819,
+      "score_norm": 0.331
+    },
+    {
+      "id": 62,
+      "x": 120,
+      "y": 120,
+      "z": 56,
+      "intensity_average_norm": 0.483,
+      "saliency_average_norm": 0.845,
+      "score_norm": 0.329
+    },
+    {
+      "id": 63,
+      "x": 120,
+      "y": 24,
+      "z": 152,
+      "intensity_average_norm": 0.466,
+      "saliency_average_norm": 0.25,
+      "score_norm": 0.291
+    },
+    {
+      "id": 64,
+      "x": 120,
+      "y": 120,
+      "z": 168,
+      "intensity_average_norm": 0.457,
+      "saliency_average_norm": 0.483,
+      "score_norm": 0.261
+    },
+    {
+      "id": 65,
+      "x": 72,
+      "y": 72,
+      "z": 40,
+      "intensity_average_norm": 0.405,
+      "saliency_average_norm": 0.897,
+      "score_norm": 0.257
+    },
+    {
+      "id": 66,
+      "x": 24,
+      "y": 72,
+      "z": 40,
+      "intensity_average_norm": 0.448,
+      "saliency_average_norm": 0.862,
+      "score_norm": 0.254
+    },
+    {
+      "id": 67,
+      "x": 72,
+      "y": 24,
+      "z": 40,
+      "intensity_average_norm": 0.431,
+      "saliency_average_norm": 0.888,
+      "score_norm": 0.252
+    },
+    {
+      "id": 68,
+      "x": 24,
+      "y": 24,
+      "z": 40,
+      "intensity_average_norm": 0.397,
+      "saliency_average_norm": 0.836,
+      "score_norm": 0.242
+    },
+    {
+      "id": 69,
+      "x": 120,
+      "y": 24,
+      "z": 40,
+      "intensity_average_norm": 0.44,
+      "saliency_average_norm": 0.905,
+      "score_norm": 0.242
+    },
+    {
+      "id": 70,
+      "x": 120,
+      "y": 72,
+      "z": 40,
+      "intensity_average_norm": 0.388,
+      "saliency_average_norm": 0.922,
+      "score_norm": 0.242
+    },
+    {
+      "id": 71,
+      "x": 24,
+      "y": 120,
+      "z": 40,
+      "intensity_average_norm": 0.422,
+      "saliency_average_norm": 0.871,
+      "score_norm": 0.239
+    },
+    {
+      "id": 72,
+      "x": 72,
+      "y": 120,
+      "z": 40,
+      "intensity_average_norm": 0.371,
+      "saliency_average_norm": 0.914,
+      "score_norm": 0.238
+    },
+    {
+      "id": 73,
+      "x": 24,
+      "y": 120,
+      "z": 168,
+      "intensity_average_norm": 0.414,
+      "saliency_average_norm": 0.707,
+      "score_norm": 0.235
+    },
+    {
+      "id": 74,
+      "x": 120,
+      "y": 120,
+      "z": 40,
+      "intensity_average_norm": 0.379,
+      "saliency_average_norm": 0.931,
+      "score_norm": 0.23
+    },
+    {
+      "id": 75,
+      "x": 24,
+      "y": 72,
+      "z": 168,
+      "intensity_average_norm": 0.353,
+      "saliency_average_norm": 0.44,
+      "score_norm": 0.217
+    },
+    {
+      "id": 76,
+      "x": 72,
+      "y": 120,
+      "z": 168,
+      "intensity_average_norm": 0.362,
+      "saliency_average_norm": 0.569,
+      "score_norm": 0.213
+    },
+    {
+      "id": 77,
+      "x": 120,
+      "y": 72,
+      "z": 168,
+      "intensity_average_norm": 0.345,
+      "saliency_average_norm": 0.422,
+      "score_norm": 0.209
+    },
+    {
+      "id": 78,
+      "x": 72,
+      "y": 24,
+      "z": 168,
+      "intensity_average_norm": 0.336,
+      "saliency_average_norm": 0.353,
+      "score_norm": 0.199
+    },
+    {
+      "id": 79,
+      "x": 72,
+      "y": 72,
+      "z": 168,
+      "intensity_average_norm": 0.328,
+      "saliency_average_norm": 0.371,
+      "score_norm": 0.179
+    },
+    {
+      "id": 80,
+      "x": 120,
+      "y": 24,
+      "z": 168,
+      "intensity_average_norm": 0.319,
+      "saliency_average_norm": 0.405,
+      "score_norm": 0.159
+    },
+    {
+      "id": 81,
+      "x": 24,
+      "y": 24,
+      "z": 168,
+      "intensity_average_norm": 0.31,
+      "saliency_average_norm": 0.586,
+      "score_norm": 0.157
+    },
+    {
+      "id": 82,
+      "x": 120,
+      "y": 120,
+      "z": 184,
+      "intensity_average_norm": 0.302,
+      "saliency_average_norm": 0.802,
+      "score_norm": 0.051
+    },
+    {
+      "id": 83,
+      "x": 120,
+      "y": 72,
+      "z": 184,
+      "intensity_average_norm": 0.293,
+      "saliency_average_norm": 0.966,
+      "score_norm": 0.04
+    },
+    {
+      "id": 84,
+      "x": 72,
+      "y": 120,
+      "z": 184,
+      "intensity_average_norm": 0.284,
+      "saliency_average_norm": 0.948,
+      "score_norm": 0.035
+    },
+    {
+      "id": 85,
+      "x": 24,
+      "y": 120,
+      "z": 184,
+      "intensity_average_norm": 0.276,
+      "saliency_average_norm": 0.957,
+      "score_norm": 0.032
+    },
+    {
+      "id": 86,
+      "x": 72,
+      "y": 72,
+      "z": 184,
+      "intensity_average_norm": 0.267,
+      "saliency_average_norm": 0.974,
+      "score_norm": 0.031
+    },
+    {
+      "id": 87,
+      "x": 120,
+      "y": 24,
+      "z": 184,
+      "intensity_average_norm": 0.259,
+      "saliency_average_norm": 1.0,
+      "score_norm": 0.028
+    },
+    {
+      "id": 88,
+      "x": 72,
+      "y": 24,
+      "z": 184,
+      "intensity_average_norm": 0.25,
+      "saliency_average_norm": 0.991,
+      "score_norm": 0.027
+    },
+    {
+      "id": 89,
+      "x": 24,
+      "y": 72,
+      "z": 184,
+      "intensity_average_norm": 0.241,
+      "saliency_average_norm": 0.94,
+      "score_norm": 0.026
+    },
+    {
+      "id": 90,
+      "x": 24,
+      "y": 24,
+      "z": 184,
+      "intensity_average_norm": 0.233,
+      "saliency_average_norm": 0.983,
+      "score_norm": 0.02
+    },
+    {
+      "id": 91,
+      "x": 72,
+      "y": 120,
+      "z": 193,
+      "intensity_average_norm": 0.224,
+      "saliency_average_norm": 0.224,
+      "score_norm": 0.0
+    },
+    {
+      "id": 92,
+      "x": 120,
+      "y": 120,
+      "z": 193,
+      "intensity_average_norm": 0.216,
+      "saliency_average_norm": 0.207,
+      "score_norm": 0.0
+    },
+    {
+      "id": 93,
+      "x": 24,
+      "y": 72,
+      "z": 193,
+      "intensity_average_norm": 0.198,
+      "saliency_average_norm": 0.198,
+      "score_norm": 0.0
+    },
+    {
+      "id": 94,
+      "x": 120,
+      "y": 72,
+      "z": 193,
+      "intensity_average_norm": 0.207,
+      "saliency_average_norm": 0.164,
+      "score_norm": 0.0
+    },
+    {
+      "id": 95,
+      "x": 24,
+      "y": 120,
+      "z": 193,
+      "intensity_average_norm": 0.19,
+      "saliency_average_norm": 0.172,
+      "score_norm": 0.0
+    },
+    {
+      "id": 96,
+      "x": 72,
+      "y": 72,
+      "z": 193,
+      "intensity_average_norm": 0.181,
+      "saliency_average_norm": 0.19,
+      "score_norm": 0.0
+    },
+    {
+      "id": 97,
+      "x": 24,
+      "y": 24,
+      "z": 193,
+      "intensity_average_norm": 0.172,
+      "saliency_average_norm": 0.216,
+      "score_norm": 0.0
+    },
+    {
+      "id": 98,
+      "x": 24,
+      "y": 24,
+      "z": 8,
+      "intensity_average_norm": 0.103,
+      "saliency_average_norm": 0.147,
+      "score_norm": 0.0
+    },
+    {
+      "id": 99,
+      "x": 72,
+      "y": 24,
+      "z": 8,
+      "intensity_average_norm": 0.112,
+      "saliency_average_norm": 0.078,
+      "score_norm": 0.0
+    },
+    {
+      "id": 100,
+      "x": 120,
+      "y": 24,
+      "z": 8,
+      "intensity_average_norm": 0.121,
+      "saliency_average_norm": 0.086,
+      "score_norm": 0.0
+    },
+    {
+      "id": 101,
+      "x": 24,
+      "y": 72,
+      "z": 8,
+      "intensity_average_norm": 0.129,
+      "saliency_average_norm": 0.129,
+      "score_norm": 0.0
+    },
+    {
+      "id": 102,
+      "x": 72,
+      "y": 72,
+      "z": 8,
+      "intensity_average_norm": 0.043,
+      "saliency_average_norm": 0.043,
+      "score_norm": 0.0
+    },
+    {
+      "id": 103,
+      "x": 120,
+      "y": 72,
+      "z": 8,
+      "intensity_average_norm": 0.034,
+      "saliency_average_norm": 0.017,
+      "score_norm": 0.0
+    },
+    {
+      "id": 104,
+      "x": 24,
+      "y": 120,
+      "z": 8,
+      "intensity_average_norm": 0.052,
+      "saliency_average_norm": 0.112,
+      "score_norm": 0.0
+    },
+    {
+      "id": 105,
+      "x": 72,
+      "y": 120,
+      "z": 8,
+      "intensity_average_norm": 0.06,
+      "saliency_average_norm": 0.026,
+      "score_norm": 0.0
+    },
+    {
+      "id": 106,
+      "x": 120,
+      "y": 120,
+      "z": 8,
+      "intensity_average_norm": 0.078,
+      "saliency_average_norm": 0.0,
+      "score_norm": 0.0
+    },
+    {
+      "id": 107,
+      "x": 24,
+      "y": 24,
+      "z": 24,
+      "intensity_average_norm": 0.086,
+      "saliency_average_norm": 0.138,
+      "score_norm": 0.0
+    },
+    {
+      "id": 108,
+      "x": 72,
+      "y": 24,
+      "z": 24,
+      "intensity_average_norm": 0.095,
+      "saliency_average_norm": 0.069,
+      "score_norm": 0.0
+    },
+    {
+      "id": 109,
+      "x": 120,
+      "y": 24,
+      "z": 24,
+      "intensity_average_norm": 0.069,
+      "saliency_average_norm": 0.103,
+      "score_norm": 0.0
+    },
+    {
+      "id": 110,
+      "x": 24,
+      "y": 72,
+      "z": 24,
+      "intensity_average_norm": 0.147,
+      "saliency_average_norm": 0.121,
+      "score_norm": 0.0
+    },
+    {
+      "id": 111,
+      "x": 72,
+      "y": 72,
+      "z": 24,
+      "intensity_average_norm": 0.138,
+      "saliency_average_norm": 0.052,
+      "score_norm": 0.0
+    },
+    {
+      "id": 112,
+      "x": 120,
+      "y": 72,
+      "z": 24,
+      "intensity_average_norm": 0.155,
+      "saliency_average_norm": 0.06,
+      "score_norm": 0.0
+    },
+    {
+      "id": 113,
+      "x": 24,
+      "y": 120,
+      "z": 24,
+      "intensity_average_norm": 0.164,
+      "saliency_average_norm": 0.095,
+      "score_norm": 0.0
+    },
+    {
+      "id": 114,
+      "x": 72,
+      "y": 120,
+      "z": 24,
+      "intensity_average_norm": 0.009,
+      "saliency_average_norm": 0.034,
+      "score_norm": 0.0
+    },
+    {
+      "id": 115,
+      "x": 120,
+      "y": 120,
+      "z": 24,
+      "intensity_average_norm": 0.017,
+      "saliency_average_norm": 0.009,
+      "score_norm": 0.0
+    },
+    {
+      "id": 116,
+      "x": 72,
+      "y": 24,
+      "z": 193,
+      "intensity_average_norm": 0.026,
+      "saliency_average_norm": 0.181,
+      "score_norm": 0.0
+    },
+    {
+      "id": 117,
+      "x": 120,
+      "y": 24,
+      "z": 193,
+      "intensity_average_norm": 0.0,
+      "saliency_average_norm": 0.155,
+      "score_norm": 0.0
+    }
+  ]
+}
