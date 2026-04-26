@@ -35,6 +35,8 @@ export const loadChannelData = async (channelIndex, options = {}) => {
     const paths = [
         { data: `./${dir}/channel_${channelIndex}_napari_data.raw`, metadata: `./${dir}/channel_${channelIndex}_napari_metadata.json` },
         { data: `${dir}/channel_${channelIndex}_napari_data.raw`, metadata: `${dir}/channel_${channelIndex}_napari_metadata.json` },
+        { data: `./${dir}/channel_${channelIndex}_data.raw`, metadata: `./${dir}/channel_${channelIndex}_data.json` },
+        { data: `${dir}/channel_${channelIndex}_data.raw`, metadata: `${dir}/channel_${channelIndex}_data.json` },
         { data: `./${dir}/channel_${channelIndex}_data.raw`, metadata: `./${dir}/channel_${channelIndex}_metadata.json` },
         { data: `${dir}/channel_${channelIndex}_data.raw`, metadata: `${dir}/channel_${channelIndex}_metadata.json` }
     ];

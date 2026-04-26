@@ -3,11 +3,22 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 import fs from 'fs'
 
-// Serve VIS2026/output for ROI positions JSON and VIS2026/Hi_res/HI_res_channel for high-res .raw + .json
+// Serve local data folders used by the viewer.
 const serveOutputPlugin = {
   name: 'serve-output',
   configureServer(server) {
     server.middlewares.use((req, res, next) => {
+      const visualizationMatch = req.url.match(/(?:\/BioProject)?\/visualization_data\/(.+)$/)
+      if (visualizationMatch) {
+        const subPath = visualizationMatch[1].split('?')[0]
+        const fullPath = path.join(process.cwd(), 'visualization_data', subPath)
+        if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+          if (subPath.endsWith('.json')) res.setHeader('Content-Type', 'application/json')
+          else if (subPath.endsWith('.raw')) res.setHeader('Content-Type', 'application/octet-stream')
+          fs.createReadStream(fullPath).pipe(res)
+          return
+        }
+      }
       const outputMatch = req.url.match(/(?:\/BioProject)?\/VIS2026\/output\/(.+)$/)
       if (outputMatch) {
         const subPath = outputMatch[1].split('?')[0]

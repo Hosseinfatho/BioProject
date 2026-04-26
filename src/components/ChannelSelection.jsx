@@ -158,6 +158,8 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
         const paths = [
           `./visualization_data/channel_${channelIndex}_napari_metadata.json`,
           `visualization_data/channel_${channelIndex}_napari_metadata.json`,
+          `./visualization_data/channel_${channelIndex}_data.json`,
+          `visualization_data/channel_${channelIndex}_data.json`,
           `./visualization_data/channel_${channelIndex}_metadata.json`,
           `visualization_data/channel_${channelIndex}_metadata.json`
         ];
@@ -261,6 +263,8 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
     const paths = [
       `./visualization_data/channel_0_napari_metadata.json`,
       `visualization_data/channel_0_napari_metadata.json`,
+      `./visualization_data/channel_0_data.json`,
+      `visualization_data/channel_0_data.json`,
       `./visualization_data/channel_0_metadata.json`,
       `visualization_data/channel_0_metadata.json`
     ];

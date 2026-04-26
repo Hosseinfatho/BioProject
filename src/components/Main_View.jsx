@@ -16,7 +16,7 @@ const CAMERA_INITIAL_STATE = {
 const MOVE_SPEED = 0.05;
 const FAST_MOVE_SPEED = 0.15;
 const LOD_COOLDOWN_MS = 200;
-const MAX_POINTS_PER_CHANNEL = 20000000;
+const MAX_POINTS_PER_CHANNEL = 200000000;
 const OPACITY_FLOOR = 0.35;
 const OPACITY_BOOST = 1.3;
 const EDGE_FEATHER = 0.99;
@@ -57,6 +57,14 @@ const buildLoadPaths = (channelIndex) => [
   {
     data: `visualization_data/channel_${channelIndex}_napari_data.raw`,
     metadata: `visualization_data/channel_${channelIndex}_napari_metadata.json`
+  },
+  {
+    data: `./visualization_data/channel_${channelIndex}_data.raw`,
+    metadata: `./visualization_data/channel_${channelIndex}_data.json`
+  },
+  {
+    data: `visualization_data/channel_${channelIndex}_data.raw`,
+    metadata: `visualization_data/channel_${channelIndex}_data.json`
   },
   {
     data: `./visualization_data/channel_${channelIndex}_data.raw`,
@@ -1623,7 +1631,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
         removeMeshFromCollection(mesh, pointCloudsRef.current);
         loadedChannels.delete(key);
         channelDataCache.delete(key);
-        console.log(`Main_View: 🗑️ Removed channel (key=${key}) (no longer selected)`);
+        console.log(`Main_View: Removed channel (key=${key}) (no longer selected)`);
       } else {
         // Channel still exists - check visibility and remove from scene if not visible
         const isVisible = channelConfig.visible !== false;
