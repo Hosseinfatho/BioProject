@@ -1,0 +1,37 @@
+{
+  "microenvironment": "Inflammation",
+  "channel_names": [
+    "MART1",
+    "MX1",
+    "IRF1",
+    "CD11c"
+  ],
+  "channel_indices": [
+    3,
+    2,
+    31,
+    42
+  ],
+  "shape": [
+    4,
+    194,
+    128,
+    128
+  ],
+  "window": {
+    "x_center": 2688,
+    "y_center": 3456,
+    "x": [
+      2624,
+      2752
+    ],
+    "y": [
+      3392,
+      3520
+    ],
+    "z": [
+      0,
+      194
+    ]
+  }
+}

@@ -1,0 +1,1901 @@
+{
+  "microenvironment": "Inflammation",
+  "channel_names": [
+    "MART1",
+    "MX1",
+    "IRF1",
+    "CD11c"
+  ],
+  "volume_shape": [
+    4,
+    194,
+    128,
+    128
+  ],
+  "coord_scale": 1,
+  "patch_shape": [
+    16,
+    16,
+    16
+  ],
+  "intensity_threshold": 0.05,
+  "roi_step": 3,
+  "subgraphs_dir": "D:\\VIS2026\\Hossein\\BioProject\\VIS2026\\Hi_res_128_128_194\\subgraphs_Tile_gat_128_128_194\\Inflammation",
+  "num_composite_voxels": 832,
+  "score_definition": "ROI score = (intensity/max_I)*(saliency/max_S)*distance_term; distance_term = 0.35+0.65*distance_factor, distance_factor = 1/(1+dist/max_dist); intensity and saliency weighted more than distance; 8-neighbor ROI, step 3",
+  "top_p_percent": 100.0,
+  "positions": [
+    {
+      "id": 1,
+      "x": 72,
+      "y": 24,
+      "z": 88,
+      "intensity_average_norm": 0.974,
+      "saliency_average_norm": 0.276,
+      "score_norm": 1.0,
+      "average_intensity_per_channel": [
+        0.691504,
+        0.779458,
+        0.483506,
+        0.773403
+      ],
+      "average_saliency": 0.276
+    },
+    {
+      "id": 2,
+      "x": 120,
+      "y": 24,
+      "z": 104,
+      "intensity_average_norm": 1.0,
+      "saliency_average_norm": 0.672,
+      "score_norm": 0.997,
+      "average_intensity_per_channel": [
+        0.390356,
+        0.851851,
+        0.592839,
+        0.98717
+      ],
+      "average_saliency": 0.672
+    },
+    {
+      "id": 3,
+      "x": 120,
+      "y": 72,
+      "z": 88,
+      "intensity_average_norm": 0.991,
+      "saliency_average_norm": 0.629,
+      "score_norm": 0.996,
+      "average_intensity_per_channel": [
+        0.584666,
+        0.764946,
+        0.790068,
+        0.404519
+      ],
+      "average_saliency": 0.629
+    },
+    {
+      "id": 4,
+      "x": 72,
+      "y": 72,
+      "z": 88,
+      "intensity_average_norm": 0.897,
+      "saliency_average_norm": 0.491,
+      "score_norm": 0.989,
+      "average_intensity_per_channel": [
+        0.75502,
+        0.679089,
+        0.636243,
+        0.21354
+      ],
+      "average_saliency": 0.491
+    },
+    {
+      "id": 5,
+      "x": 120,
+      "y": 24,
+      "z": 88,
+      "intensity_average_norm": 0.983,
+      "saliency_average_norm": 0.302,
+      "score_norm": 0.943,
+      "average_intensity_per_channel": [
+        0.138701,
+        0.684145,
+        0.674631,
+        0.683779
+      ],
+      "average_saliency": 0.302
+    },
+    {
+      "id": 6,
+      "x": 120,
+      "y": 72,
+      "z": 104,
+      "intensity_average_norm": 0.966,
+      "saliency_average_norm": 0.552,
+      "score_norm": 0.932,
+      "average_intensity_per_channel": [
+        0.995725,
+        0.679329,
+        0.508667,
+        0.282732
+      ],
+      "average_saliency": 0.552
+    },
+    {
+      "id": 7,
+      "x": 72,
+      "y": 24,
+      "z": 104,
+      "intensity_average_norm": 0.931,
+      "saliency_average_norm": 0.284,
+      "score_norm": 0.93,
+      "average_intensity_per_channel": [
+        0.19845,
+        0.913142,
+        0.352864,
+        0.977209
+      ],
+      "average_saliency": 0.284
+    },
+    {
+      "id": 8,
+      "x": 72,
+      "y": 120,
+      "z": 88,
+      "intensity_average_norm": 0.922,
+      "saliency_average_norm": 0.741,
+      "score_norm": 0.873,
+      "average_intensity_per_channel": [
+        0.491189,
+        0.820271,
+        0.734648,
+        0.220288
+      ],
+      "average_saliency": 0.741
+    },
+    {
+      "id": 9,
+      "x": 120,
+      "y": 24,
+      "z": 120,
+      "intensity_average_norm": 0.948,
+      "saliency_average_norm": 0.457,
+      "score_norm": 0.869,
+      "average_intensity_per_channel": [
+        0.531724,
+        0.870151,
+        0.40292,
+        0.984558
+      ],
+      "average_saliency": 0.457
+    },
+    {
+      "id": 10,
+      "x": 120,
+      "y": 120,
+      "z": 88,
+      "intensity_average_norm": 0.957,
+      "saliency_average_norm": 0.759,
+      "score_norm": 0.863,
+      "average_intensity_per_channel": [
+        0.694565,
+        0.765056,
+        0.403513,
+        0.503818
+      ],
+      "average_saliency": 0.759
+    },
+    {
+      "id": 11,
+      "x": 24,
+      "y": 120,
+      "z": 88,
+      "intensity_average_norm": 0.94,
+      "saliency_average_norm": 0.681,
+      "score_norm": 0.859,
+      "average_intensity_per_channel": [
+        0.646255,
+        0.796624,
+        0.653821,
+        0.119595
+      ],
+      "average_saliency": 0.681
+    },
+    {
+      "id": 12,
+      "x": 24,
+      "y": 72,
+      "z": 104,
+      "intensity_average_norm": 0.879,
+      "saliency_average_norm": 0.534,
+      "score_norm": 0.857,
+      "average_intensity_per_channel": [
+        0.95512,
+        0.644263,
+        0.596152,
+        0.11427
+      ],
+      "average_saliency": 0.534
+    },
+    {
+      "id": 13,
+      "x": 72,
+      "y": 120,
+      "z": 104,
+      "intensity_average_norm": 0.888,
+      "saliency_average_norm": 0.621,
+      "score_norm": 0.832,
+      "average_intensity_per_channel": [
+        0.66063,
+        0.75283,
+        0.551353,
+        0.195198
+      ],
+      "average_saliency": 0.621
+    },
+    {
+      "id": 14,
+      "x": 24,
+      "y": 72,
+      "z": 88,
+      "intensity_average_norm": 0.871,
+      "saliency_average_norm": 0.517,
+      "score_norm": 0.828,
+      "average_intensity_per_channel": [
+        0.701133,
+        0.723606,
+        0.614307,
+        0.094683
+      ],
+      "average_saliency": 0.517
+    },
+    {
+      "id": 15,
+      "x": 24,
+      "y": 120,
+      "z": 104,
+      "intensity_average_norm": 0.905,
+      "saliency_average_norm": 0.75,
+      "score_norm": 0.825,
+      "average_intensity_per_channel": [
+        0.383467,
+        0.867666,
+        0.80752,
+        0.160662
+      ],
+      "average_saliency": 0.75
+    },
+    {
+      "id": 16,
+      "x": 72,
+      "y": 72,
+      "z": 104,
+      "intensity_average_norm": 0.776,
+      "saliency_average_norm": 0.388,
+      "score_norm": 0.823,
+      "average_intensity_per_channel": [
+        0.307434,
+        0.41999,
+        0.727639,
+        0.237122
+      ],
+      "average_saliency": 0.388
+    },
+    {
+      "id": 17,
+      "x": 120,
+      "y": 120,
+      "z": 104,
+      "intensity_average_norm": 0.914,
+      "saliency_average_norm": 0.647,
+      "score_norm": 0.811,
+      "average_intensity_per_channel": [
+        0.734392,
+        0.698877,
+        0.469392,
+        0.609871
+      ],
+      "average_saliency": 0.647
+    },
+    {
+      "id": 18,
+      "x": 72,
+      "y": 24,
+      "z": 120,
+      "intensity_average_norm": 0.845,
+      "saliency_average_norm": 0.328,
+      "score_norm": 0.786,
+      "average_intensity_per_channel": [
+        0.240803,
+        0.646978,
+        0.609558,
+        0.735325
+      ],
+      "average_saliency": 0.328
+    },
+    {
+      "id": 19,
+      "x": 72,
+      "y": 72,
+      "z": 72,
+      "intensity_average_norm": 0.784,
+      "saliency_average_norm": 0.603,
+      "score_norm": 0.76,
+      "average_intensity_per_channel": [
+        0.312388,
+        0.752981,
+        0.567048,
+        0.200588
+      ],
+      "average_saliency": 0.603
+    },
+    {
+      "id": 20,
+      "x": 72,
+      "y": 120,
+      "z": 120,
+      "intensity_average_norm": 0.853,
+      "saliency_average_norm": 0.716,
+      "score_norm": 0.754,
+      "average_intensity_per_channel": [
+        0.75884,
+        0.574114,
+        0.522754,
+        0.218774
+      ],
+      "average_saliency": 0.716
+    },
+    {
+      "id": 21,
+      "x": 24,
+      "y": 72,
+      "z": 136,
+      "intensity_average_norm": 0.828,
+      "saliency_average_norm": 0.5,
+      "score_norm": 0.748,
+      "average_intensity_per_channel": [
+        0.944172,
+        0.475366,
+        0.478152,
+        0.065464
+      ],
+      "average_saliency": 0.5
+    },
+    {
+      "id": 22,
+      "x": 24,
+      "y": 120,
+      "z": 120,
+      "intensity_average_norm": 0.862,
+      "saliency_average_norm": 0.767,
+      "score_norm": 0.745,
+      "average_intensity_per_channel": [
+        0.517349,
+        0.716592,
+        0.686138,
+        0.134329
+      ],
+      "average_saliency": 0.767
+    },
+    {
+      "id": 23,
+      "x": 120,
+      "y": 72,
+      "z": 120,
+      "intensity_average_norm": 0.836,
+      "saliency_average_norm": 0.509,
+      "score_norm": 0.741,
+      "average_intensity_per_channel": [
+        0.936084,
+        0.661589,
+        0.357585,
+        0.136746
+      ],
+      "average_saliency": 0.509
+    },
+    {
+      "id": 24,
+      "x": 24,
+      "y": 72,
+      "z": 120,
+      "intensity_average_norm": 0.793,
+      "saliency_average_norm": 0.578,
+      "score_norm": 0.732,
+      "average_intensity_per_channel": [
+        0.693838,
+        0.416311,
+        0.641606,
+        0.090664
+      ],
+      "average_saliency": 0.578
+    },
+    {
+      "id": 25,
+      "x": 72,
+      "y": 72,
+      "z": 120,
+      "intensity_average_norm": 0.707,
+      "saliency_average_norm": 0.466,
+      "score_norm": 0.732,
+      "average_intensity_per_channel": [
+        0.765735,
+        0.525481,
+        0.423713,
+        0.145537
+      ],
+      "average_saliency": 0.466
+    },
+    {
+      "id": 26,
+      "x": 120,
+      "y": 72,
+      "z": 72,
+      "intensity_average_norm": 0.802,
+      "saliency_average_norm": 0.56,
+      "score_norm": 0.699,
+      "average_intensity_per_channel": [
+        0.246672,
+        0.751067,
+        0.497432,
+        0.270032
+      ],
+      "average_saliency": 0.56
+    },
+    {
+      "id": 27,
+      "x": 24,
+      "y": 72,
+      "z": 72,
+      "intensity_average_norm": 0.759,
+      "saliency_average_norm": 0.698,
+      "score_norm": 0.696,
+      "average_intensity_per_channel": [
+        0.469702,
+        0.776218,
+        0.436492,
+        0.068164
+      ],
+      "average_saliency": 0.698
+    },
+    {
+      "id": 28,
+      "x": 120,
+      "y": 120,
+      "z": 120,
+      "intensity_average_norm": 0.819,
+      "saliency_average_norm": 0.724,
+      "score_norm": 0.69,
+      "average_intensity_per_channel": [
+        0.377244,
+        0.51564,
+        0.728379,
+        0.524424
+      ],
+      "average_saliency": 0.724
+    },
+    {
+      "id": 29,
+      "x": 72,
+      "y": 24,
+      "z": 72,
+      "intensity_average_norm": 0.733,
+      "saliency_average_norm": 0.543,
+      "score_norm": 0.678,
+      "average_intensity_per_channel": [
+        0.423555,
+        0.737075,
+        0.360393,
+        0.287444
+      ],
+      "average_saliency": 0.543
+    },
+    {
+      "id": 30,
+      "x": 120,
+      "y": 120,
+      "z": 136,
+      "intensity_average_norm": 0.81,
+      "saliency_average_norm": 0.595,
+      "score_norm": 0.674,
+      "average_intensity_per_channel": [
+        0.847332,
+        0.436909,
+        0.51728,
+        0.239656
+      ],
+      "average_saliency": 0.595
+    },
+    {
+      "id": 31,
+      "x": 72,
+      "y": 120,
+      "z": 136,
+      "intensity_average_norm": 0.741,
+      "saliency_average_norm": 0.612,
+      "score_norm": 0.648,
+      "average_intensity_per_channel": [
+        0.832434,
+        0.50752,
+        0.384009,
+        0.166389
+      ],
+      "average_saliency": 0.612
+    },
+    {
+      "id": 32,
+      "x": 24,
+      "y": 120,
+      "z": 72,
+      "intensity_average_norm": 0.767,
+      "saliency_average_norm": 0.733,
+      "score_norm": 0.646,
+      "average_intensity_per_channel": [
+        0.187544,
+        0.730044,
+        0.746582,
+        0.113105
+      ],
+      "average_saliency": 0.733
+    },
+    {
+      "id": 33,
+      "x": 24,
+      "y": 24,
+      "z": 88,
+      "intensity_average_norm": 0.716,
+      "saliency_average_norm": 0.474,
+      "score_norm": 0.646,
+      "average_intensity_per_channel": [
+        0.435603,
+        0.726672,
+        0.621353,
+        0.120774
+      ],
+      "average_saliency": 0.474
+    },
+    {
+      "id": 34,
+      "x": 120,
+      "y": 24,
+      "z": 72,
+      "intensity_average_norm": 0.75,
+      "saliency_average_norm": 0.448,
+      "score_norm": 0.641,
+      "average_intensity_per_channel": [
+        0.260369,
+        0.77759,
+        0.246045,
+        0.2454
+      ],
+      "average_saliency": 0.448
+    },
+    {
+      "id": 35,
+      "x": 24,
+      "y": 120,
+      "z": 136,
+      "intensity_average_norm": 0.724,
+      "saliency_average_norm": 0.69,
+      "score_norm": 0.624,
+      "average_intensity_per_channel": [
+        0.680645,
+        0.547295,
+        0.382288,
+        0.060815
+      ],
+      "average_saliency": 0.69
+    },
+    {
+      "id": 36,
+      "x": 24,
+      "y": 24,
+      "z": 104,
+      "intensity_average_norm": 0.69,
+      "saliency_average_norm": 0.362,
+      "score_norm": 0.613,
+      "average_intensity_per_channel": [
+        0.396619,
+        0.516775,
+        0.614692,
+        0.066589
+      ],
+      "average_saliency": 0.362
+    },
+    {
+      "id": 37,
+      "x": 24,
+      "y": 24,
+      "z": 120,
+      "intensity_average_norm": 0.664,
+      "saliency_average_norm": 0.379,
+      "score_norm": 0.593,
+      "average_intensity_per_channel": [
+        0.688047,
+        0.561631,
+        0.351387,
+        0.064211
+      ],
+      "average_saliency": 0.379
+    },
+    {
+      "id": 38,
+      "x": 120,
+      "y": 72,
+      "z": 136,
+      "intensity_average_norm": 0.681,
+      "saliency_average_norm": 0.336,
+      "score_norm": 0.585,
+      "average_intensity_per_channel": [
+        0.835552,
+        0.491833,
+        0.464192,
+        0.140735
+      ],
+      "average_saliency": 0.336
+    },
+    {
+      "id": 39,
+      "x": 72,
+      "y": 120,
+      "z": 72,
+      "intensity_average_norm": 0.655,
+      "saliency_average_norm": 0.664,
+      "score_norm": 0.58,
+      "average_intensity_per_channel": [
+        0.260361,
+        0.819788,
+        0.257119,
+        0.091438
+      ],
+      "average_saliency": 0.664
+    },
+    {
+      "id": 40,
+      "x": 24,
+      "y": 24,
+      "z": 72,
+      "intensity_average_norm": 0.647,
+      "saliency_average_norm": 0.638,
+      "score_norm": 0.576,
+      "average_intensity_per_channel": [
+        0.311162,
+        0.94575,
+        0.49771,
+        0.066636
+      ],
+      "average_saliency": 0.638
+    },
+    {
+      "id": 41,
+      "x": 120,
+      "y": 120,
+      "z": 152,
+      "intensity_average_norm": 0.698,
+      "saliency_average_norm": 0.293,
+      "score_norm": 0.567,
+      "average_intensity_per_channel": [
+        0.936597,
+        0.38449,
+        0.362861,
+        0.197588
+      ],
+      "average_saliency": 0.293
+    },
+    {
+      "id": 42,
+      "x": 24,
+      "y": 72,
+      "z": 152,
+      "intensity_average_norm": 0.638,
+      "saliency_average_norm": 0.319,
+      "score_norm": 0.563,
+      "average_intensity_per_channel": [
+        0.66209,
+        0.409868,
+        0.542415,
+        0.098198
+      ],
+      "average_saliency": 0.319
+    },
+    {
+      "id": 43,
+      "x": 72,
+      "y": 72,
+      "z": 136,
+      "intensity_average_norm": 0.603,
+      "saliency_average_norm": 0.397,
+      "score_norm": 0.562,
+      "average_intensity_per_channel": [
+        0.586301,
+        0.471357,
+        0.337668,
+        0.127502
+      ],
+      "average_saliency": 0.397
+    },
+    {
+      "id": 44,
+      "x": 24,
+      "y": 120,
+      "z": 152,
+      "intensity_average_norm": 0.672,
+      "saliency_average_norm": 0.526,
+      "score_norm": 0.554,
+      "average_intensity_per_channel": [
+        0.835696,
+        0.459985,
+        0.265676,
+        0.03563
+      ],
+      "average_saliency": 0.526
+    },
+    {
+      "id": 45,
+      "x": 120,
+      "y": 24,
+      "z": 136,
+      "intensity_average_norm": 0.629,
+      "saliency_average_norm": 0.431,
+      "score_norm": 0.533,
+      "average_intensity_per_channel": [
+        0.206946,
+        0.448914,
+        0.377832,
+        0.497498
+      ],
+      "average_saliency": 0.431
+    },
+    {
+      "id": 46,
+      "x": 24,
+      "y": 24,
+      "z": 136,
+      "intensity_average_norm": 0.612,
+      "saliency_average_norm": 0.345,
+      "score_norm": 0.53,
+      "average_intensity_per_channel": [
+        0.718374,
+        0.509065,
+        0.334045,
+        0.04936
+      ],
+      "average_saliency": 0.345
+    },
+    {
+      "id": 47,
+      "x": 120,
+      "y": 120,
+      "z": 72,
+      "intensity_average_norm": 0.621,
+      "saliency_average_norm": 0.655,
+      "score_norm": 0.519,
+      "average_intensity_per_channel": [
+        0.28739,
+        0.728157,
+        0.16835,
+        0.162861
+      ],
+      "average_saliency": 0.655
+    },
+    {
+      "id": 48,
+      "x": 72,
+      "y": 24,
+      "z": 136,
+      "intensity_average_norm": 0.586,
+      "saliency_average_norm": 0.414,
+      "score_norm": 0.506,
+      "average_intensity_per_channel": [
+        0.221897,
+        0.436289,
+        0.370601,
+        0.18918
+      ],
+      "average_saliency": 0.414
+    },
+    {
+      "id": 49,
+      "x": 72,
+      "y": 120,
+      "z": 152,
+      "intensity_average_norm": 0.595,
+      "saliency_average_norm": 0.31,
+      "score_norm": 0.489,
+      "average_intensity_per_channel": [
+        0.506052,
+        0.42905,
+        0.252234,
+        0.179795
+      ],
+      "average_saliency": 0.31
+    },
+    {
+      "id": 50,
+      "x": 72,
+      "y": 24,
+      "z": 152,
+      "intensity_average_norm": 0.578,
+      "saliency_average_norm": 0.233,
+      "score_norm": 0.467,
+      "average_intensity_per_channel": [
+        0.531509,
+        0.416772,
+        0.199402,
+        0.119043
+      ],
+      "average_saliency": 0.233
+    },
+    {
+      "id": 51,
+      "x": 120,
+      "y": 72,
+      "z": 152,
+      "intensity_average_norm": 0.569,
+      "saliency_average_norm": 0.259,
+      "score_norm": 0.448,
+      "average_intensity_per_channel": [
+        0.725173,
+        0.356631,
+        0.307288,
+        0.149395
+      ],
+      "average_saliency": 0.259
+    },
+    {
+      "id": 52,
+      "x": 24,
+      "y": 24,
+      "z": 152,
+      "intensity_average_norm": 0.56,
+      "saliency_average_norm": 0.241,
+      "score_norm": 0.397,
+      "average_intensity_per_channel": [
+        0.288696,
+        0.371521,
+        0.096936,
+        0.030823
+      ],
+      "average_saliency": 0.241
+    },
+    {
+      "id": 53,
+      "x": 72,
+      "y": 72,
+      "z": 152,
+      "intensity_average_norm": 0.552,
+      "saliency_average_norm": 0.267,
+      "score_norm": 0.391,
+      "average_intensity_per_channel": [
+        0.536597,
+        0.355002,
+        0.275886,
+        0.136064
+      ],
+      "average_saliency": 0.267
+    },
+    {
+      "id": 54,
+      "x": 24,
+      "y": 72,
+      "z": 56,
+      "intensity_average_norm": 0.543,
+      "saliency_average_norm": 0.784,
+      "score_norm": 0.381,
+      "average_intensity_per_channel": [
+        0.216072,
+        0.753574,
+        0.0671,
+        0.038337
+      ],
+      "average_saliency": 0.784
+    },
+    {
+      "id": 55,
+      "x": 72,
+      "y": 72,
+      "z": 56,
+      "intensity_average_norm": 0.491,
+      "saliency_average_norm": 0.828,
+      "score_norm": 0.375,
+      "average_intensity_per_channel": [
+        0.120378,
+        0.711719,
+        0.0875,
+        0.058774
+      ],
+      "average_saliency": 0.828
+    },
+    {
+      "id": 56,
+      "x": 72,
+      "y": 24,
+      "z": 56,
+      "intensity_average_norm": 0.517,
+      "saliency_average_norm": 0.81,
+      "score_norm": 0.368,
+      "average_intensity_per_channel": [
+        0.115471,
+        0.736501,
+        0.048552,
+        0.068191
+      ],
+      "average_saliency": 0.81
+    },
+    {
+      "id": 57,
+      "x": 24,
+      "y": 24,
+      "z": 56,
+      "intensity_average_norm": 0.534,
+      "saliency_average_norm": 0.776,
+      "score_norm": 0.357,
+      "average_intensity_per_channel": [
+        0.16396,
+        0.752852,
+        0.064849,
+        0.030825
+      ],
+      "average_saliency": 0.776
+    },
+    {
+      "id": 58,
+      "x": 120,
+      "y": 72,
+      "z": 56,
+      "intensity_average_norm": 0.509,
+      "saliency_average_norm": 0.853,
+      "score_norm": 0.354,
+      "average_intensity_per_channel": [
+        0.110313,
+        0.721963,
+        0.058621,
+        0.056531
+      ],
+      "average_saliency": 0.853
+    },
+    {
+      "id": 59,
+      "x": 24,
+      "y": 120,
+      "z": 56,
+      "intensity_average_norm": 0.526,
+      "saliency_average_norm": 0.793,
+      "score_norm": 0.347,
+      "average_intensity_per_channel": [
+        0.120139,
+        0.701292,
+        0.097661,
+        0.031292
+      ],
+      "average_saliency": 0.793
+    },
+    {
+      "id": 60,
+      "x": 120,
+      "y": 24,
+      "z": 56,
+      "intensity_average_norm": 0.5,
+      "saliency_average_norm": 0.879,
+      "score_norm": 0.341,
+      "average_intensity_per_channel": [
+        0.101406,
+        0.731035,
+        0.042515,
+        0.067141
+      ],
+      "average_saliency": 0.879
+    },
+    {
+      "id": 61,
+      "x": 72,
+      "y": 120,
+      "z": 56,
+      "intensity_average_norm": 0.474,
+      "saliency_average_norm": 0.819,
+      "score_norm": 0.331,
+      "average_intensity_per_channel": [
+        0.103142,
+        0.693347,
+        0.023457,
+        0.050452
+      ],
+      "average_saliency": 0.819
+    },
+    {
+      "id": 62,
+      "x": 120,
+      "y": 120,
+      "z": 56,
+      "intensity_average_norm": 0.483,
+      "saliency_average_norm": 0.845,
+      "score_norm": 0.329,
+      "average_intensity_per_channel": [
+        0.101404,
+        0.722314,
+        0.029348,
+        0.090654
+      ],
+      "average_saliency": 0.845
+    },
+    {
+      "id": 63,
+      "x": 120,
+      "y": 24,
+      "z": 152,
+      "intensity_average_norm": 0.466,
+      "saliency_average_norm": 0.25,
+      "score_norm": 0.291,
+      "average_intensity_per_channel": [
+        0.109961,
+        0.265264,
+        0.235186,
+        0.117319
+      ],
+      "average_saliency": 0.25
+    },
+    {
+      "id": 64,
+      "x": 120,
+      "y": 120,
+      "z": 168,
+      "intensity_average_norm": 0.457,
+      "saliency_average_norm": 0.483,
+      "score_norm": 0.261,
+      "average_intensity_per_channel": [
+        0.345034,
+        0.241313,
+        0.146399,
+        0.099563
+      ],
+      "average_saliency": 0.483
+    },
+    {
+      "id": 65,
+      "x": 72,
+      "y": 72,
+      "z": 40,
+      "intensity_average_norm": 0.405,
+      "saliency_average_norm": 0.897,
+      "score_norm": 0.257,
+      "average_intensity_per_channel": [
+        0.081865,
+        0.589697,
+        0.0,
+        0.015022
+      ],
+      "average_saliency": 0.897
+    },
+    {
+      "id": 66,
+      "x": 24,
+      "y": 72,
+      "z": 40,
+      "intensity_average_norm": 0.448,
+      "saliency_average_norm": 0.862,
+      "score_norm": 0.254,
+      "average_intensity_per_channel": [
+        0.084412,
+        0.600676,
+        0.0,
+        0.003892
+      ],
+      "average_saliency": 0.862
+    },
+    {
+      "id": 67,
+      "x": 72,
+      "y": 24,
+      "z": 40,
+      "intensity_average_norm": 0.431,
+      "saliency_average_norm": 0.888,
+      "score_norm": 0.252,
+      "average_intensity_per_channel": [
+        0.071035,
+        0.571638,
+        0.0,
+        0.023535
+      ],
+      "average_saliency": 0.888
+    },
+    {
+      "id": 68,
+      "x": 24,
+      "y": 24,
+      "z": 40,
+      "intensity_average_norm": 0.397,
+      "saliency_average_norm": 0.836,
+      "score_norm": 0.242,
+      "average_intensity_per_channel": [
+        0.08011,
+        0.563535,
+        0.000703,
+        0.007839
+      ],
+      "average_saliency": 0.836
+    },
+    {
+      "id": 69,
+      "x": 120,
+      "y": 24,
+      "z": 40,
+      "intensity_average_norm": 0.44,
+      "saliency_average_norm": 0.905,
+      "score_norm": 0.242,
+      "average_intensity_per_channel": [
+        0.074727,
+        0.605347,
+        0.0,
+        0.017749
+      ],
+      "average_saliency": 0.905
+    },
+    {
+      "id": 70,
+      "x": 120,
+      "y": 72,
+      "z": 40,
+      "intensity_average_norm": 0.388,
+      "saliency_average_norm": 0.922,
+      "score_norm": 0.242,
+      "average_intensity_per_channel": [
+        0.08021,
+        0.589653,
+        0.0,
+        0.013918
+      ],
+      "average_saliency": 0.922
+    },
+    {
+      "id": 71,
+      "x": 24,
+      "y": 120,
+      "z": 40,
+      "intensity_average_norm": 0.422,
+      "saliency_average_norm": 0.871,
+      "score_norm": 0.239,
+      "average_intensity_per_channel": [
+        0.081816,
+        0.586768,
+        0.0,
+        0.006216
+      ],
+      "average_saliency": 0.871
+    },
+    {
+      "id": 72,
+      "x": 72,
+      "y": 120,
+      "z": 40,
+      "intensity_average_norm": 0.371,
+      "saliency_average_norm": 0.914,
+      "score_norm": 0.238,
+      "average_intensity_per_channel": [
+        0.078098,
+        0.581218,
+        0.0,
+        0.016287
+      ],
+      "average_saliency": 0.914
+    },
+    {
+      "id": 73,
+      "x": 24,
+      "y": 120,
+      "z": 168,
+      "intensity_average_norm": 0.414,
+      "saliency_average_norm": 0.707,
+      "score_norm": 0.235,
+      "average_intensity_per_channel": [
+        0.323391,
+        0.25398,
+        0.10072,
+        0.035955
+      ],
+      "average_saliency": 0.707
+    },
+    {
+      "id": 74,
+      "x": 120,
+      "y": 120,
+      "z": 40,
+      "intensity_average_norm": 0.379,
+      "saliency_average_norm": 0.931,
+      "score_norm": 0.23,
+      "average_intensity_per_channel": [
+        0.072739,
+        0.59042,
+        0.0,
+        0.006265
+      ],
+      "average_saliency": 0.931
+    },
+    {
+      "id": 75,
+      "x": 24,
+      "y": 72,
+      "z": 168,
+      "intensity_average_norm": 0.353,
+      "saliency_average_norm": 0.44,
+      "score_norm": 0.217,
+      "average_intensity_per_channel": [
+        0.225232,
+        0.227556,
+        0.152358,
+        0.026062
+      ],
+      "average_saliency": 0.44
+    },
+    {
+      "id": 76,
+      "x": 72,
+      "y": 120,
+      "z": 168,
+      "intensity_average_norm": 0.362,
+      "saliency_average_norm": 0.569,
+      "score_norm": 0.213,
+      "average_intensity_per_channel": [
+        0.218501,
+        0.23219,
+        0.105942,
+        0.071538
+      ],
+      "average_saliency": 0.569
+    },
+    {
+      "id": 77,
+      "x": 120,
+      "y": 72,
+      "z": 168,
+      "intensity_average_norm": 0.345,
+      "saliency_average_norm": 0.422,
+      "score_norm": 0.209,
+      "average_intensity_per_channel": [
+        0.198162,
+        0.217151,
+        0.127983,
+        0.056375
+      ],
+      "average_saliency": 0.422
+    },
+    {
+      "id": 78,
+      "x": 72,
+      "y": 24,
+      "z": 168,
+      "intensity_average_norm": 0.336,
+      "saliency_average_norm": 0.353,
+      "score_norm": 0.199,
+      "average_intensity_per_channel": [
+        0.237017,
+        0.246609,
+        0.048911,
+        0.058765
+      ],
+      "average_saliency": 0.353
+    },
+    {
+      "id": 79,
+      "x": 72,
+      "y": 72,
+      "z": 168,
+      "intensity_average_norm": 0.328,
+      "saliency_average_norm": 0.371,
+      "score_norm": 0.179,
+      "average_intensity_per_channel": [
+        0.115754,
+        0.217788,
+        0.085989,
+        0.060769
+      ],
+      "average_saliency": 0.371
+    },
+    {
+      "id": 80,
+      "x": 120,
+      "y": 24,
+      "z": 168,
+      "intensity_average_norm": 0.319,
+      "saliency_average_norm": 0.405,
+      "score_norm": 0.159,
+      "average_intensity_per_channel": [
+        0.074211,
+        0.199817,
+        0.073071,
+        0.060393
+      ],
+      "average_saliency": 0.405
+    },
+    {
+      "id": 81,
+      "x": 24,
+      "y": 24,
+      "z": 168,
+      "intensity_average_norm": 0.31,
+      "saliency_average_norm": 0.586,
+      "score_norm": 0.157,
+      "average_intensity_per_channel": [
+        0.116392,
+        0.235823,
+        0.040081,
+        0.022354
+      ],
+      "average_saliency": 0.586
+    },
+    {
+      "id": 82,
+      "x": 120,
+      "y": 120,
+      "z": 184,
+      "intensity_average_norm": 0.302,
+      "saliency_average_norm": 0.802,
+      "score_norm": 0.051,
+      "average_intensity_per_channel": [
+        0.014299,
+        0.021455,
+        0.056082,
+        0.05427
+      ],
+      "average_saliency": 0.802
+    },
+    {
+      "id": 83,
+      "x": 120,
+      "y": 72,
+      "z": 184,
+      "intensity_average_norm": 0.293,
+      "saliency_average_norm": 0.966,
+      "score_norm": 0.04,
+      "average_intensity_per_channel": [
+        0.007659,
+        0.019883,
+        0.059387,
+        0.037258
+      ],
+      "average_saliency": 0.966
+    },
+    {
+      "id": 84,
+      "x": 72,
+      "y": 120,
+      "z": 184,
+      "intensity_average_norm": 0.284,
+      "saliency_average_norm": 0.948,
+      "score_norm": 0.035,
+      "average_intensity_per_channel": [
+        0.011663,
+        0.020281,
+        0.011616,
+        0.053127
+      ],
+      "average_saliency": 0.948
+    },
+    {
+      "id": 85,
+      "x": 24,
+      "y": 120,
+      "z": 184,
+      "intensity_average_norm": 0.276,
+      "saliency_average_norm": 0.957,
+      "score_norm": 0.032,
+      "average_intensity_per_channel": [
+        0.0152,
+        0.022363,
+        0.032788,
+        0.026089
+      ],
+      "average_saliency": 0.957
+    },
+    {
+      "id": 86,
+      "x": 72,
+      "y": 72,
+      "z": 184,
+      "intensity_average_norm": 0.267,
+      "saliency_average_norm": 0.974,
+      "score_norm": 0.031,
+      "average_intensity_per_channel": [
+        0.00677,
+        0.019795,
+        0.021987,
+        0.036978
+      ],
+      "average_saliency": 0.974
+    },
+    {
+      "id": 87,
+      "x": 120,
+      "y": 24,
+      "z": 184,
+      "intensity_average_norm": 0.259,
+      "saliency_average_norm": 1.0,
+      "score_norm": 0.028,
+      "average_intensity_per_channel": [
+        0.003032,
+        0.020129,
+        0.033262,
+        0.030964
+      ],
+      "average_saliency": 1.0
+    },
+    {
+      "id": 88,
+      "x": 72,
+      "y": 24,
+      "z": 184,
+      "intensity_average_norm": 0.25,
+      "saliency_average_norm": 0.991,
+      "score_norm": 0.027,
+      "average_intensity_per_channel": [
+        0.007825,
+        0.023809,
+        0.006062,
+        0.034719
+      ],
+      "average_saliency": 0.991
+    },
+    {
+      "id": 89,
+      "x": 24,
+      "y": 72,
+      "z": 184,
+      "intensity_average_norm": 0.241,
+      "saliency_average_norm": 0.94,
+      "score_norm": 0.026,
+      "average_intensity_per_channel": [
+        0.012568,
+        0.021133,
+        0.028687,
+        0.015337
+      ],
+      "average_saliency": 0.94
+    },
+    {
+      "id": 90,
+      "x": 24,
+      "y": 24,
+      "z": 184,
+      "intensity_average_norm": 0.233,
+      "saliency_average_norm": 0.983,
+      "score_norm": 0.02,
+      "average_intensity_per_channel": [
+        0.005898,
+        0.019031,
+        0.009282,
+        0.017605
+      ],
+      "average_saliency": 0.983
+    },
+    {
+      "id": 91,
+      "x": 72,
+      "y": 120,
+      "z": 193,
+      "intensity_average_norm": 0.224,
+      "saliency_average_norm": 0.224,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.004501,
+        0.044761
+      ],
+      "average_saliency": 0.224
+    },
+    {
+      "id": 92,
+      "x": 120,
+      "y": 120,
+      "z": 193,
+      "intensity_average_norm": 0.216,
+      "saliency_average_norm": 0.207,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.024865,
+        0.036428
+      ],
+      "average_saliency": 0.207
+    },
+    {
+      "id": 93,
+      "x": 24,
+      "y": 72,
+      "z": 193,
+      "intensity_average_norm": 0.198,
+      "saliency_average_norm": 0.198,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.010326,
+        0.002921
+      ],
+      "average_saliency": 0.198
+    },
+    {
+      "id": 94,
+      "x": 120,
+      "y": 72,
+      "z": 193,
+      "intensity_average_norm": 0.207,
+      "saliency_average_norm": 0.164,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.037826,
+        0.012465
+      ],
+      "average_saliency": 0.164
+    },
+    {
+      "id": 95,
+      "x": 24,
+      "y": 120,
+      "z": 193,
+      "intensity_average_norm": 0.19,
+      "saliency_average_norm": 0.172,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.024488,
+        0.019536
+      ],
+      "average_saliency": 0.172
+    },
+    {
+      "id": 96,
+      "x": 72,
+      "y": 72,
+      "z": 193,
+      "intensity_average_norm": 0.181,
+      "saliency_average_norm": 0.19,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.00957,
+        0.031927
+      ],
+      "average_saliency": 0.19
+    },
+    {
+      "id": 97,
+      "x": 24,
+      "y": 24,
+      "z": 193,
+      "intensity_average_norm": 0.172,
+      "saliency_average_norm": 0.216,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.005547,
+        0.006671
+      ],
+      "average_saliency": 0.216
+    },
+    {
+      "id": 98,
+      "x": 24,
+      "y": 24,
+      "z": 8,
+      "intensity_average_norm": 0.103,
+      "saliency_average_norm": 0.147,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "average_saliency": 0.147
+    },
+    {
+      "id": 99,
+      "x": 72,
+      "y": 24,
+      "z": 8,
+      "intensity_average_norm": 0.112,
+      "saliency_average_norm": 0.078,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "average_saliency": 0.078
+    },
+    {
+      "id": 100,
+      "x": 120,
+      "y": 24,
+      "z": 8,
+      "intensity_average_norm": 0.121,
+      "saliency_average_norm": 0.086,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "average_saliency": 0.086
+    },
+    {
+      "id": 101,
+      "x": 24,
+      "y": 72,
+      "z": 8,
+      "intensity_average_norm": 0.129,
+      "saliency_average_norm": 0.129,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "average_saliency": 0.129
+    },
+    {
+      "id": 102,
+      "x": 72,
+      "y": 72,
+      "z": 8,
+      "intensity_average_norm": 0.043,
+      "saliency_average_norm": 0.043,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "average_saliency": 0.043
+    },
+    {
+      "id": 103,
+      "x": 120,
+      "y": 72,
+      "z": 8,
+      "intensity_average_norm": 0.034,
+      "saliency_average_norm": 0.017,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "average_saliency": 0.017
+    },
+    {
+      "id": 104,
+      "x": 24,
+      "y": 120,
+      "z": 8,
+      "intensity_average_norm": 0.052,
+      "saliency_average_norm": 0.112,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "average_saliency": 0.112
+    },
+    {
+      "id": 105,
+      "x": 72,
+      "y": 120,
+      "z": 8,
+      "intensity_average_norm": 0.06,
+      "saliency_average_norm": 0.026,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "average_saliency": 0.026
+    },
+    {
+      "id": 106,
+      "x": 120,
+      "y": 120,
+      "z": 8,
+      "intensity_average_norm": 0.078,
+      "saliency_average_norm": 0.0,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "average_saliency": 0.0
+    },
+    {
+      "id": 107,
+      "x": 24,
+      "y": 24,
+      "z": 24,
+      "intensity_average_norm": 0.086,
+      "saliency_average_norm": 0.138,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "average_saliency": 0.138
+    },
+    {
+      "id": 108,
+      "x": 72,
+      "y": 24,
+      "z": 24,
+      "intensity_average_norm": 0.095,
+      "saliency_average_norm": 0.069,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "average_saliency": 0.069
+    },
+    {
+      "id": 109,
+      "x": 120,
+      "y": 24,
+      "z": 24,
+      "intensity_average_norm": 0.069,
+      "saliency_average_norm": 0.103,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "average_saliency": 0.103
+    },
+    {
+      "id": 110,
+      "x": 24,
+      "y": 72,
+      "z": 24,
+      "intensity_average_norm": 0.147,
+      "saliency_average_norm": 0.121,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "average_saliency": 0.121
+    },
+    {
+      "id": 111,
+      "x": 72,
+      "y": 72,
+      "z": 24,
+      "intensity_average_norm": 0.138,
+      "saliency_average_norm": 0.052,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "average_saliency": 0.052
+    },
+    {
+      "id": 112,
+      "x": 120,
+      "y": 72,
+      "z": 24,
+      "intensity_average_norm": 0.155,
+      "saliency_average_norm": 0.06,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "average_saliency": 0.06
+    },
+    {
+      "id": 113,
+      "x": 24,
+      "y": 120,
+      "z": 24,
+      "intensity_average_norm": 0.164,
+      "saliency_average_norm": 0.095,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "average_saliency": 0.095
+    },
+    {
+      "id": 114,
+      "x": 72,
+      "y": 120,
+      "z": 24,
+      "intensity_average_norm": 0.009,
+      "saliency_average_norm": 0.0,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "average_saliency": 0.0
+    },
+    {
+      "id": 115,
+      "x": 120,
+      "y": 120,
+      "z": 24,
+      "intensity_average_norm": 0.017,
+      "saliency_average_norm": 0.009,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "average_saliency": 0.009
+    },
+    {
+      "id": 116,
+      "x": 72,
+      "y": 24,
+      "z": 193,
+      "intensity_average_norm": 0.026,
+      "saliency_average_norm": 0.181,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.004744,
+        0.012335
+      ],
+      "average_saliency": 0.181
+    },
+    {
+      "id": 117,
+      "x": 120,
+      "y": 24,
+      "z": 193,
+      "intensity_average_norm": 0.0,
+      "saliency_average_norm": 0.0,
+      "score_norm": 0.0,
+      "average_intensity_per_channel": [
+        0.0,
+        0.0,
+        0.016545,
+        0.010625
+      ],
+      "average_saliency": 0.0
+    }
+  ]
+}

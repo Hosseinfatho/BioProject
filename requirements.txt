@@ -1,0 +1,12 @@
+# Data & download (00_data.py, 10_download_data.py, 20_load_channels.py, Hi_res.py, metadata.py)
+numpy>=1.20
+zarr>=3.0
+s3fs>=2024.1
+dask[array]>=2024.1
+requests>=2.28
+ome-types>=0.4.0
+tqdm>=4.60
+
+# Model (60_model.py)
+torch>=2.0
+torch-geometric>=2.0

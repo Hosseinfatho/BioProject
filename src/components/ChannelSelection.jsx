@@ -4,6 +4,10 @@ import channelNamesData from '../channel_names.json';
 // Generate channel options (0-69 based on data shape)
 const CHANNEL_COUNT = 70;
 
+// Default intensity thresholds as fraction of data range: 3% (min) and 80% (max)
+const DEFAULT_THRESHOLD_MIN_FRACTION = 0.05;
+const DEFAULT_THRESHOLD_MAX_FRACTION = 0.9;
+
 // Helper function to convert RGB to hex
 const rgbToHex = (r, g, b) => {
   return '#' + [r, g, b].map(x => {
@@ -195,8 +199,8 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
             }
 
             const rangeSpan = range[1] - range[0];
-            const defaultMin = Math.round(range[0] + rangeSpan * 0.1);
-            const defaultMax = Math.round(range[0] + rangeSpan * 0.9);
+            const defaultMin = Math.round(range[0] + rangeSpan * DEFAULT_THRESHOLD_MIN_FRACTION);
+            const defaultMax = Math.round(range[0] + rangeSpan * DEFAULT_THRESHOLD_MAX_FRACTION);
 
             setPendingThresholds((prevPending) => ({
               ...prevPending,
@@ -274,10 +278,9 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
       }
     }
 
-    // Set threshold to 10%-90% of range
     const rangeSpan = dataRange[1] - dataRange[0];
-    const defaultMin = Math.round(dataRange[0] + rangeSpan * 0.1);
-    const defaultMax = Math.round(dataRange[0] + rangeSpan * 0.9);
+    const defaultMin = Math.round(dataRange[0] + rangeSpan * DEFAULT_THRESHOLD_MIN_FRACTION);
+    const defaultMax = Math.round(dataRange[0] + rangeSpan * DEFAULT_THRESHOLD_MAX_FRACTION);
 
     const newChannel = {
       id: newId,
@@ -326,10 +329,9 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
           const newIndex = parseInt(value);
           const range = channelRanges[newIndex] || [0, 65535];
           updated.dataRange = range;
-          // Reset thresholds to 10%-90% of range
           const rangeSpan = range[1] - range[0];
-          updated.thresholdMin = Math.round(range[0] + rangeSpan * 0.1);
-          updated.thresholdMax = Math.round(range[0] + rangeSpan * 0.9);
+          updated.thresholdMin = Math.round(range[0] + rangeSpan * DEFAULT_THRESHOLD_MIN_FRACTION);
+          updated.thresholdMax = Math.round(range[0] + rangeSpan * DEFAULT_THRESHOLD_MAX_FRACTION);
         }
 
         // Convert threshold and opacity to numbers

@@ -378,7 +378,7 @@ const LocalViewContent = ({ selectedRegionData, channels = [], onCloseTab, regio
 
     for (const channelConfig of visibleChannels) {
       try {
-        const data = await loadChannelData(channelConfig.channelIndex);
+        const data = await loadChannelData(channelConfig.channelIndex, { basePath: channelConfig.channelBasePath });
         if (data) {
           referenceChannelConfig = channelConfig;
           referenceData = data;
@@ -466,7 +466,7 @@ const LocalViewContent = ({ selectedRegionData, channels = [], onCloseTab, regio
     for (const channelConfig of visibleChannels) {
       try {
         console.log(`Local_View: Loading channel ${channelConfig.channelIndex}...`);
-        const channelData = await loadChannelData(channelConfig.channelIndex);
+        const channelData = await loadChannelData(channelConfig.channelIndex, { basePath: channelConfig.channelBasePath });
         if (!channelData) {
           console.warn(`Local_View: Failed to load channel ${channelConfig.channelIndex}`);
           continue;

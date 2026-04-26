@@ -16,13 +16,13 @@ const CAMERA_INITIAL_STATE = {
 const MOVE_SPEED = 0.05;
 const FAST_MOVE_SPEED = 0.15;
 const LOD_COOLDOWN_MS = 200;
-const MAX_POINTS_PER_CHANNEL = 16000000;
+const MAX_POINTS_PER_CHANNEL = 20000000;
 const OPACITY_FLOOR = 0.35;
 const OPACITY_BOOST = 1.3;
 const EDGE_FEATHER = 0.99;
 const JITTER_SCALE = 0.1;
 const AMBIENT_COLOR = new THREE.Color(0.9, 0.9, 0.95);
-const DEFAULT_THRESHOLD_MIN_FRACTION = 0.1;
+const DEFAULT_THRESHOLD_MIN_FRACTION = 0.03;
 const DEFAULT_THRESHOLD_MAX_FRACTION = 0.9;
 
 // Color map for selection boxes
@@ -76,7 +76,10 @@ const getConfigSignature = (config) =>
     config.opacity ?? ''
   ].join('|');
 
-const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initialSelectionBounds, selectedRegionsData = [] }) => {
+// Position space in ROI JSON uses grid index × 16; same as 60_model.py coord_scale
+const ROI_POSITION_SCALE = 16;
+
+const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initialSelectionBounds, selectedRegionsData = [], roiBoxes = null, onRoiHover = null }) => {
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
@@ -96,6 +99,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
   const cuboidRef = useRef(null);
   const cuboidWireframeRef = useRef(null);
   const cuboidWireframesRef = useRef([]); // Array to store multiple selection boxes
+  const roiWireframesRef = useRef([]); // ROI cubes from positions JSON (not selection)
   const wireframeRegionMapRef = useRef(new Map()); // Map wireframe to regionId
   const isSelectingRef = useRef(false);
   const selectionEndRef = useRef(null);
@@ -177,7 +181,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     if (estimatedPassing > MAX_POINTS_PER_CHANNEL) {
       const ratio = estimatedPassing / MAX_POINTS_PER_CHANNEL;
       sampling = Math.max(2, Math.ceil(Math.cbrt(Math.max(ratio, 1) * 2)));
-      if (totalVoxels > 20_000_000) {
+      if (totalVoxels > 20000000) {
         sampling = Math.max(sampling, 4);
       }
     }
@@ -337,12 +341,12 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     lodState.lastUpdate = now;
 
     const loadedChannels = loadedChannelsRef.current;
-    loadedChannels.forEach((entry, channelIndex) => {
+    loadedChannels.forEach((entry, key) => {
       if (!entry) return;
       if (entry.sampling === desiredSampling || entry.lastRequestedSampling === desiredSampling) return;
 
-      const channelData = channelDataCacheRef.current.get(channelIndex);
-      const channelConfig = channelConfigsRef.current.get(channelIndex);
+      const channelData = channelDataCacheRef.current.get(key);
+      const channelConfig = channelConfigsRef.current.get(key);
       if (!channelData || !channelConfig) return;
 
       const previousMesh = entry.mesh;
@@ -355,7 +359,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
         if (wasVisible && previousMesh) scene.remove(previousMesh);
         disposeMesh(previousMesh);
         removeMeshFromCollection(previousMesh, pointCloudsRef.current);
-        loadedChannels.delete(channelIndex);
+        loadedChannels.delete(key);
         return;
       }
 
@@ -368,7 +372,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
       }
 
       pointCloudsRef.current.push(mesh);
-      loadedChannels.set(channelIndex, { mesh, sampling, lastRequestedSampling: desiredSampling });
+      loadedChannels.set(key, { mesh, sampling, lastRequestedSampling: desiredSampling });
 
       if (wasVisible && channelConfig.visible !== false) {
         scene.add(mesh);
@@ -419,10 +423,34 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
           console.error('Main_View: Error removing temporary wireframe:', err);
         }
       }
+      // Remove ROI wireframes and labels
+      roiWireframesRef.current.forEach((entry) => {
+        const w = entry.wireframe || entry;
+        const s = entry.sprite;
+        if (w && scene.children.includes(w)) {
+          try {
+            scene.remove(w);
+            if (w.geometry) w.geometry.dispose();
+            if (w.material) w.material.dispose();
+          } catch (err) {
+            console.error('Main_View: Error removing ROI wireframe:', err);
+          }
+        }
+        if (s && scene.children.includes(s)) {
+          try {
+            scene.remove(s);
+            if (s.material?.map) s.material.map.dispose();
+            if (s.material) s.material.dispose();
+          } catch (err) {
+            console.error('Main_View: Error removing ROI label:', err);
+          }
+        }
+      });
     }
     
     // Clear all references
     cuboidWireframesRef.current = [];
+    roiWireframesRef.current = [];
     cuboidWireframeRef.current = null;
     cuboidRef.current = null;
     wireframeRegionMapRef.current.clear();
@@ -580,6 +608,42 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     };
   };
 
+  // Convert ROI box (center in position space, size, volumeShape [C,Z,Y,X]) to world bounds
+  // Uses same scaling as scene: volumeShape [C,Z,Y,X] -> xSize=X, ySize=Y, zSize=Z
+  const roiBoxToWorldBounds = useCallback((roiBox) => {
+    if (!roiBox?.center || roiBox.size == null || !Array.isArray(roiBox.volumeShape) || roiBox.volumeShape.length < 4) return null;
+    const [c, zSize, ySize, xSize] = roiBox.volumeShape;
+    const maxDim = Math.max(xSize, ySize, zSize);
+    const scaleX = xSize / maxDim;
+    const scaleY = ySize / maxDim;
+    const scaleZ = (zSize / maxDim) / 4;
+    const half = (roiBox.size || 200) / 2;
+    const pos = roiBox.center;
+    const vx = pos.x / ROI_POSITION_SCALE;
+    const vy = pos.y / ROI_POSITION_SCALE;
+    const vz = pos.z / ROI_POSITION_SCALE;
+    const halfV = half / ROI_POSITION_SCALE;
+    const vMinX = Math.max(0, vx - halfV);
+    const vMaxX = Math.min(xSize - 1, vx + halfV);
+    const vMinY = Math.max(0, vy - halfV);
+    const vMaxY = Math.min(ySize - 1, vy + halfV);
+    const vMinZ = Math.max(0, vz - halfV);
+    const vMaxZ = Math.min(zSize - 1, vz + halfV);
+    const toWorld = (v, size, scale) => ((v / size) * 2 - 1) * scale;
+    const minX = toWorld(vMinX, xSize, scaleX);
+    const maxX = toWorld(vMaxX, xSize, scaleX);
+    const minY = toWorld(vMinY, ySize, scaleY);
+    const maxY = toWorld(vMaxY, ySize, scaleY);
+    const minZ = toWorld(vMinZ, zSize, scaleZ);
+    const maxZ = toWorld(vMaxZ, zSize, scaleZ);
+    return {
+      min: new THREE.Vector3(minX, minY, minZ),
+      max: new THREE.Vector3(maxX, maxY, maxZ),
+      center: new THREE.Vector3((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2),
+      size: new THREE.Vector3(maxX - minX, maxY - minY, maxZ - minZ)
+    };
+  }, []);
+
   // Create or update 3D cuboid wireframe in scene - adds new box to array
   const updateCuboidWireframe = (worldBounds, isTemporary = false) => {
     try {
@@ -688,6 +752,101 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     }
   };
 
+  // Create a sprite with ROI number label (canvas texture); position below the box
+  const createRoiLabelSprite = useCallback((roiIndex, center, boxSize) => {
+    const canvas = document.createElement('canvas');
+    const size = 64;
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = '#00ff88';
+    ctx.strokeStyle = '#00ff88';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, size - 2, size - 2);
+    ctx.font = 'bold 32px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#00ff88';
+    ctx.fillText(String(roiIndex), size / 2, size / 2);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false
+    });
+    const sprite = new THREE.Sprite(material);
+    const labelSize = 0.04;
+    sprite.scale.set(labelSize, labelSize, 1);
+    sprite.position.copy(center);
+    sprite.position.y -= (boxSize.y / 2) + labelSize * 0.6;
+    sprite.renderOrder = 101;
+    return sprite;
+  }, []);
+
+  // Add a single ROI rectangle (flat in XY plane) from positions JSON; stored in roiWireframesRef. Optionally add label with roiIndex.
+  const addRoiWireframe = useCallback((worldBounds, roiIndex) => {
+    if (!sceneRef.current || !worldBounds?.center || !worldBounds?.size) return;
+    const size = worldBounds.size;
+    const center = worldBounds.center;
+    const minSize = 0.001;
+    const safeSizeX = Math.max(minSize, Math.abs(size.x));
+    const safeSizeY = Math.max(minSize, Math.abs(size.y));
+    const planeGeometry = new THREE.PlaneGeometry(safeSizeX, safeSizeY);
+    const rectEdges = new THREE.EdgesGeometry(planeGeometry);
+    const roiColorHex = '#00ff88';
+    const lineColor = parseInt(roiColorHex.replace('#', ''), 16);
+    const lineMaterial = new THREE.LineBasicMaterial({
+      color: lineColor,
+      linewidth: 6,
+      transparent: true,
+      opacity: 0.96
+    });
+    const wireframe = new THREE.LineSegments(rectEdges, lineMaterial);
+    wireframe.renderOrder = 100;
+    wireframe.position.copy(center);
+    wireframe.userData.isRoiBox = true;
+    wireframe.userData.worldBounds = worldBounds;
+    sceneRef.current.add(wireframe);
+    wireframe.userData.roiIndex = roiIndex;
+    let sprite = null;
+    if (roiIndex != null && roiIndex > 0) {
+      sprite = createRoiLabelSprite(roiIndex, center.clone(), size);
+      sprite.userData.roiIndex = roiIndex;
+      sceneRef.current.add(sprite);
+    }
+    roiWireframesRef.current.push({ wireframe, sprite });
+    planeGeometry.dispose();
+  }, [createRoiLabelSprite]);
+
+  // Sync ROI boxes from props: when roiBoxes (array) is set, convert each to world and add wireframes; when null, remove all
+  useEffect(() => {
+    if (!sceneRef.current) return;
+    const scene = sceneRef.current;
+    const roiWireframes = roiWireframesRef.current;
+    while (roiWireframes.length) {
+      const entry = roiWireframes.pop();
+      const w = entry.wireframe || entry;
+      const s = entry.sprite;
+      if (scene.children.includes(w)) scene.remove(w);
+      if (w.geometry) w.geometry.dispose();
+      if (w.material) w.material.dispose();
+      if (s && scene.children.includes(s)) {
+        scene.remove(s);
+        if (s.material?.map) s.material.map.dispose();
+        if (s.material) s.material.dispose();
+      }
+    }
+    const list = Array.isArray(roiBoxes) ? roiBoxes : roiBoxes ? [roiBoxes] : [];
+    list.forEach((roiBox) => {
+      const worldBounds = roiBoxToWorldBounds(roiBox);
+      if (worldBounds) addRoiWireframe(worldBounds, roiBox.roiIndex ?? roiBox.roiId);
+    });
+  }, [roiBoxes, roiBoxToWorldBounds, addRoiWireframe]);
+
   // Extract selected region data from all visible channels using 3D cuboid bounds
   const extractSelectedRegion = useCallback(async (worldBounds) => {
     if (!worldBounds || !worldBounds.min || !worldBounds.max) {
@@ -713,15 +872,16 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     let referenceData = null;
 
     for (const channel of visibleChannels) {
-      let data = channelDataCacheRef.current.get(channel.channelIndex);
+      const cacheKey = channel.id ?? channel.channelIndex;
+      let data = channelDataCacheRef.current.get(cacheKey);
 
       // If not in cache, try to fetch
       if (!data) {
         console.log(`Main_View: extractSelectedRegion - Data missing for channel ${channel.channelIndex}, fetching...`);
         try {
-          data = await loadChannelData(channel.channelIndex);
+          data = await loadChannelData(channel.channelIndex, { basePath: channel.channelBasePath });
           if (data) {
-            channelDataCacheRef.current.set(channel.channelIndex, data);
+            channelDataCacheRef.current.set(cacheKey, data);
           }
         } catch (err) {
           console.warn(`Main_View: extractSelectedRegion - Failed to fetch channel ${channel.channelIndex}`, err);
@@ -1178,6 +1338,20 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
             state.panOffset.y -= (e.clientY - mouseY) * 0.001;
             updateCameraPosition();
           }
+          if (onRoiHover && !isRotating && !isPanning && rendererRef.current && cameraRef.current && sceneRef.current) {
+            const rect = rendererRef.current.domElement.getBoundingClientRect();
+            const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), cameraRef.current);
+            const roiObjects = roiWireframesRef.current.flatMap((entry) => [entry.wireframe, entry.sprite].filter(Boolean));
+            const hits = raycaster.intersectObjects(roiObjects, false);
+            if (hits.length > 0 && hits[0].object.userData.roiIndex != null) {
+              onRoiHover(hits[0].object.userData.roiIndex);
+            } else {
+              onRoiHover(null);
+            }
+          }
         }
         mouseX = e.clientX;
         mouseY = e.clientY;
@@ -1363,6 +1537,29 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
         }
       });
       cuboidWireframesRef.current = [];
+      roiWireframesRef.current.forEach((entry) => {
+        const w = entry.wireframe || entry;
+        const s = entry.sprite;
+        if (w && sceneRef.current) {
+          try {
+            if (sceneRef.current.children.includes(w)) sceneRef.current.remove(w);
+            if (w.geometry) w.geometry.dispose();
+            if (w.material) w.material.dispose();
+          } catch (err) {
+            console.error('Main_View: Error disposing ROI wireframe:', err);
+          }
+        }
+        if (s && sceneRef.current) {
+          try {
+            if (sceneRef.current.children.includes(s)) sceneRef.current.remove(s);
+            if (s.material?.map) s.material.map.dispose();
+            if (s.material) s.material.dispose();
+          } catch (err) {
+            console.error('Main_View: Error disposing ROI label:', err);
+          }
+        }
+      });
+      roiWireframesRef.current = [];
 
       if (msaaRenderTargetRef.current) {
         msaaRenderTargetRef.current.dispose();
@@ -1402,16 +1599,18 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     const loadedChannels = loadedChannelsRef.current;
     const channelDataCache = channelDataCacheRef.current;
 
-    // Create a map of channel indices to their configs for quick lookup
-    const channelConfigMap = new Map();
+    // Map from (id ?? channelIndex) to config for lookup by loadedChannels key
+    const channelConfigByKey = new Map();
     channels.forEach((cfg) => {
-      channelConfigMap.set(cfg.channelIndex, cfg);
+      const k = cfg.id ?? cfg.channelIndex;
+      channelConfigByKey.set(k, cfg);
+      channelConfigByKey.set(cfg.channelIndex, cfg);
     });
 
     // First pass: Remove channels that are no longer in the list or are not visible
     let needsRender = false;
-    loadedChannels.forEach((entry, channelIndex) => {
-      const channelConfig = channelConfigMap.get(channelIndex);
+    loadedChannels.forEach((entry, key) => {
+      const channelConfig = channelConfigByKey.get(key) ?? channels.find((c) => (c.id ?? c.channelIndex) === key);
 
       if (!channelConfig) {
         // Channel completely removed from list - dispose everything
@@ -1422,9 +1621,9 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
         }
         disposeMesh(mesh);
         removeMeshFromCollection(mesh, pointCloudsRef.current);
-        loadedChannels.delete(channelIndex);
-        channelDataCache.delete(channelIndex);
-        console.log(`Main_View: 🗑️ Removed channel ${channelIndex} (no longer selected)`);
+        loadedChannels.delete(key);
+        channelDataCache.delete(key);
+        console.log(`Main_View: 🗑️ Removed channel (key=${key}) (no longer selected)`);
       } else {
         // Channel still exists - check visibility and remove from scene if not visible
         const isVisible = channelConfig.visible !== false;
@@ -1446,10 +1645,10 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     // Second pass: Update channel configs and handle visibility changes
     channels.forEach((channelConfig) => {
       const channelIndex = channelConfig.channelIndex;
-      channelConfigsRef.current.set(channelIndex, channelConfig);
-
-      const entry = loadedChannels.get(channelIndex);
-      const channelData = channelDataCache.get(channelIndex);
+      const key = channelConfig.id ?? channelIndex;
+      channelConfigsRef.current.set(key, channelConfig);
+      const entry = loadedChannels.get(key);
+      const channelData = channelDataCache.get(key);
       let mesh = entry?.mesh ?? null;
 
       const newSignature = getConfigSignature(channelConfig);
@@ -1461,8 +1660,8 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
         }
         disposeMesh(mesh);
         removeMeshFromCollection(mesh, pointCloudsRef.current);
-        loadedChannels.delete(channelIndex);
-        channelDataCache.delete(channelIndex);
+        loadedChannels.delete(key);
+        channelDataCache.delete(key);
         mesh = null;
         console.log(`Main_View:  Channel ${channelIndex} flagged for reload due to configuration change`);
       }
@@ -1485,7 +1684,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
 
     const loadChannels = async () => {
       const visibleChannels = channels.filter((cfg) => cfg.visible !== false);
-      const toLoad = visibleChannels.filter((cfg) => !loadedChannels.has(cfg.channelIndex));
+      const toLoad = visibleChannels.filter((cfg) => !loadedChannels.has(cfg.id ?? cfg.channelIndex));
       if (toLoad.length === 0) {
         renderScene();
         return;
@@ -1497,21 +1696,22 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
         if (channelConfig.visible === false) continue;
 
         try {
-          const currentConfig = channelConfigsRef.current.get(channelConfig.channelIndex);
+          const cacheKey = channelConfig.id ?? channelConfig.channelIndex;
+          const currentConfig = channelConfigsRef.current.get(cacheKey);
           if (!currentConfig || getConfigSignature(currentConfig) !== getConfigSignature(channelConfig)) {
             console.log(`Main_View:  Skipping stale load for channel ${channelConfig.channelIndex}`);
             continue;
           }
 
-          let channelData = channelDataCache.get(channelConfig.channelIndex);
+          let channelData = channelDataCache.get(cacheKey);
           if (!channelData) {
-            channelData = await loadChannelData(channelConfig.channelIndex);
+            channelData = await loadChannelData(channelConfig.channelIndex, { basePath: channelConfig.channelBasePath });
             if (channelData) {
-              channelDataCache.set(channelConfig.channelIndex, channelData);
+              channelDataCache.set(cacheKey, channelData);
             }
           }
 
-          const latestConfig = channelConfigsRef.current.get(channelConfig.channelIndex);
+          const latestConfig = channelConfigsRef.current.get(cacheKey);
           if (!latestConfig || getConfigSignature(latestConfig) !== getConfigSignature(channelConfig)) {
             console.log(`Main_View:  Loaded data discarded for channel ${channelConfig.channelIndex} (stale)`);
             continue;
@@ -1524,7 +1724,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
 
           if (result) {
             const { mesh, sampling } = result;
-            loadedChannels.set(channelConfig.channelIndex, {
+            loadedChannels.set(channelConfig.id ?? channelConfig.channelIndex, {
               mesh,
               sampling,
               lastRequestedSampling: desiredSampling,
@@ -1553,7 +1753,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
       }
 
       const visibleCount = visibleChannels.filter((cfg) => {
-        const entry = loadedChannels.get(cfg.channelIndex);
+        const entry = loadedChannels.get(cfg.id ?? cfg.channelIndex);
         return entry?.mesh && scene.children.includes(entry.mesh);
       }).length;
       console.log(`Main_View: Channel update complete. Visible ${visibleCount}/${visibleChannels.length}`);

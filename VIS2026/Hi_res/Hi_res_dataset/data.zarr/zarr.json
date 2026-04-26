@@ -1,0 +1,24 @@
+{
+  "attributes": {
+    "channel_names": [
+      "MART1",
+      "MX1",
+      "IRF1",
+      "CD11c"
+    ],
+    "channel_indices": [
+      3,
+      2,
+      31,
+      42
+    ],
+    "axes": [
+      "c",
+      "z",
+      "y",
+      "x"
+    ]
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}

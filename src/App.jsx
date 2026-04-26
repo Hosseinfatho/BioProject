@@ -5,7 +5,7 @@ import Region_Selection from './components/Region_Selection';
 import Main_View from './components/Main_View';
 import Local_View from './components/Local_View';
 import Graph_Pannel from './components/Graph_Pannel';
-import Direction_view from './components/Direction_view';
+import ROI from './components/ROI';
 
 // Helper function to convert RGB to hex
 const rgbToHex = (r, g, b) => {
@@ -22,6 +22,9 @@ function App() {
   const lastAggregatedSignatureRef = useRef('');
 
   const [selectedRegionsData, setSelectedRegionsData] = useState([]);
+  const [roiPositions, setRoiPositions] = useState([]);
+  const [roiBoxes, setRoiBoxes] = useState(null);
+  const [highlightedRoiIndex, setHighlightedRoiIndex] = useState(null); // 1-based; hover on 3D box or chart bar
   const lastSelectionBoundsRef = useRef(null); // Persist selection bounds across region switches
 
   const handleChannelsChange = useCallback((updatedChannels) => {
@@ -225,8 +228,10 @@ function App() {
               channels={channels}
               activeRegions={selectedRegions}
               onSelectionChange={handleSelectionChange}
-              initialSelectionBounds={lastSelectionBoundsRef.current} // Pass persistent bounds
+              initialSelectionBounds={lastSelectionBoundsRef.current}
               selectedRegionsData={selectedRegionsData}
+              roiBoxes={roiBoxes}
+              onRoiHover={setHighlightedRoiIndex}
             />
           </div>
 
@@ -265,7 +270,7 @@ function App() {
                 key={selectedRegionsData.map(r => r.id).join('-') || 'empty'} 
                 selectedRegionsData={selectedRegionsData} 
                 channels={channels} 
-                selectedRegions={selectedRegions} 
+                selectedRegions={selectedRegions}
               />
             </div>
             {/* Direction View - 33.3% width */}
@@ -276,7 +281,12 @@ function App() {
               boxSizing: 'border-box',
               flexShrink: 0
             }}>
-              <Direction_view channels={channels} />
+              <ROI
+                onPositionsChange={setRoiPositions}
+                onRoiBoxChange={setRoiBoxes}
+                highlightedRoiIndex={highlightedRoiIndex}
+                onChartRoiHover={setHighlightedRoiIndex}
+              />
             </div>
           </div>
         </div>

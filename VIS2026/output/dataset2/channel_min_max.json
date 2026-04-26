@@ -1,0 +1,347 @@
+[
+  {
+    "name": "Hoechst",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "5'hmC",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "MX1",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "MART1",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Hoechst",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "CD3E (do not use)",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "MHC-I",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "SOX10",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Hoechst",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "S100B",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "MITF",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "GranzymeB (do not use)",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Hoechst",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "pan-cytokeratin",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "lamin ABC",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "PDL1",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Hoechst",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "PD1 (do not use)",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "S100A",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "CD31",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Hoechst",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "CD206",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "pMLC2",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "CD11b (do not use)",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Hoechst",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "CD4",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "LAG3",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "CD20",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Hoechst",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "PRAME",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "CD163",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "IRF1",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Hoechst",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "B-catenin",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "CD3E",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "CD8a",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Hoechst",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "CD11b",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "FOXP3",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "PD1",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Hoechst",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Ki67",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "CD11c",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "COX-IV",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Hoechst",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "lysozyme C",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "SOX9",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "PMEL",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "CD103",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Hoechst",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "CyclinD1",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "BAF1",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Hoechst",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "B-actin",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "mast cell tryptase",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "CD15",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Podoplanin",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Hoechst",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "B-tubulin",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Catalase",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "y-H2AX",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Hoechst",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "E-cadherin",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Vimentin",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Neurofilament L",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Granzyme B",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Hoechst",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "MHC-II",
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "H3K27me3",
+    "min": null,
+    "max": null
+  }
+]
