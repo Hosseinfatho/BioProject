@@ -117,7 +117,7 @@ function ROI({ onPositionsChange, onRoiBoxChange, highlightedRoiIndex = null, on
     const height = container.clientHeight;
     if (width <= 0 || height <= 0) return;
 
-    const margin = { top: 20, right: 44, bottom: 58, left: 36 };
+    const margin = { top: 12, right: 44, bottom: 66, left: 36 };
     const chartWidth = width - margin.left - margin.right;
     const chartHeight = height - margin.top - margin.bottom;
     if (chartWidth <= 0 || chartHeight <= 0) return;

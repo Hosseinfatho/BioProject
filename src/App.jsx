@@ -231,7 +231,6 @@ function App() {
               initialSelectionBounds={lastSelectionBoundsRef.current}
               selectedRegionsData={selectedRegionsData}
               roiBoxes={roiBoxes}
-              highlightedRoiIndex={highlightedRoiIndex}
               onRoiHover={setHighlightedRoiIndex}
             />
           </div>

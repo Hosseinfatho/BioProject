@@ -87,7 +87,7 @@ const getConfigSignature = (config) =>
 // Position space in ROI JSON uses grid index × 16; same as 60_model.py coord_scale
 const ROI_POSITION_SCALE = 16;
 
-const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initialSelectionBounds, selectedRegionsData = [], roiBoxes = null, highlightedRoiIndex = null, onRoiHover = null }) => {
+const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initialSelectionBounds, selectedRegionsData = [], roiBoxes = null, onRoiHover = null }) => {
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
@@ -435,7 +435,6 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
       roiWireframesRef.current.forEach((entry) => {
         const w = entry.wireframe || entry;
         const s = entry.sprite;
-        const h = entry.highlightFrame;
         if (w && scene.children.includes(w)) {
           try {
             scene.remove(w);
@@ -452,17 +451,6 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
             if (s.material) s.material.dispose();
           } catch (err) {
             console.error('Main_View: Error removing ROI label:', err);
-          }
-        }
-        if (h && scene.children.includes(h)) {
-          try {
-            scene.remove(h);
-            h.traverse((child) => {
-              if (child.geometry) child.geometry.dispose();
-              if (child.material) child.material.dispose();
-            });
-          } catch (err) {
-            console.error('Main_View: Error removing ROI highlight frame:', err);
           }
         }
       });
@@ -830,8 +818,6 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     wireframe.position.copy(center);
     wireframe.userData.isRoiBox = true;
     wireframe.userData.worldBounds = worldBounds;
-    wireframe.userData.baseLineWidth = 6;
-    wireframe.userData.baseScale = 1;
     sceneRef.current.add(wireframe);
     wireframe.userData.roiIndex = roiIndex;
     let sprite = null;
@@ -840,72 +826,9 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
       sprite.userData.roiIndex = roiIndex;
       sceneRef.current.add(sprite);
     }
-
-    const highlightMaterial = new THREE.MeshBasicMaterial({
-      color: 0xffff00,
-      transparent: true,
-      opacity: 0.95,
-      depthTest: false,
-      depthWrite: false,
-      side: THREE.DoubleSide
-    });
-    const maxRoiSize = Math.max(safeSizeX, safeSizeY);
-    const edgeThickness = Math.max(maxRoiSize * 0.18, 0.02);
-    const edgeDepth = Math.max(maxRoiSize * 0.08, 0.01);
-    const highlightFrame = new THREE.Group();
-    const framePieces = [
-      { width: safeSizeX + edgeThickness, height: edgeThickness, x: 0, y: safeSizeY / 2 },
-      { width: safeSizeX + edgeThickness, height: edgeThickness, x: 0, y: -safeSizeY / 2 },
-      { width: edgeThickness, height: safeSizeY + edgeThickness, x: -safeSizeX / 2, y: 0 },
-      { width: edgeThickness, height: safeSizeY + edgeThickness, x: safeSizeX / 2, y: 0 }
-    ];
-    framePieces.forEach((piece) => {
-      const edgeMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(piece.width, piece.height, edgeDepth),
-        highlightMaterial
-      );
-      edgeMesh.position.set(piece.x, piece.y, 0.0005);
-      highlightFrame.add(edgeMesh);
-    });
-    highlightFrame.position.copy(center);
-    highlightFrame.renderOrder = 120;
-    highlightFrame.visible = false;
-    highlightFrame.userData.roiIndex = roiIndex;
-    sceneRef.current.add(highlightFrame);
-
-    roiWireframesRef.current.push({ wireframe, sprite, highlightFrame });
+    roiWireframesRef.current.push({ wireframe, sprite });
     planeGeometry.dispose();
   }, [createRoiLabelSprite]);
-
-  // Make the ROI/3D box under selection much easier to see.
-  useEffect(() => {
-    let needsRender = false;
-    roiWireframesRef.current.forEach(({ wireframe, sprite, highlightFrame }) => {
-      if (!wireframe?.material) return;
-
-      const isHighlighted = highlightedRoiIndex != null && wireframe.userData.roiIndex === highlightedRoiIndex;
-      wireframe.material.linewidth = isHighlighted ? 24 : (wireframe.userData.baseLineWidth || 6);
-      wireframe.material.opacity = isHighlighted ? 1 : 0.96;
-      wireframe.material.color.set(isHighlighted ? '#ffff00' : '#00ff88');
-      wireframe.scale.setScalar(isHighlighted ? 1.08 : (wireframe.userData.baseScale || 1));
-      wireframe.renderOrder = isHighlighted ? 110 : 100;
-      wireframe.material.needsUpdate = true;
-
-      if (sprite) {
-        const spriteSize = isHighlighted ? 0.07 : 0.04;
-        sprite.scale.set(spriteSize, spriteSize, 1);
-        sprite.renderOrder = isHighlighted ? 111 : 101;
-      }
-
-      if (highlightFrame) {
-        highlightFrame.visible = isHighlighted;
-      }
-
-      needsRender = true;
-    });
-
-    if (needsRender) renderScene();
-  }, [highlightedRoiIndex, roiBoxes, renderScene]);
 
   // Sync ROI boxes from props: when roiBoxes (array) is set, convert each to world and add wireframes; when null, remove all
   useEffect(() => {
@@ -916,7 +839,6 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
       const entry = roiWireframes.pop();
       const w = entry.wireframe || entry;
       const s = entry.sprite;
-      const h = entry.highlightFrame;
       if (scene.children.includes(w)) scene.remove(w);
       if (w.geometry) w.geometry.dispose();
       if (w.material) w.material.dispose();
@@ -924,13 +846,6 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
         scene.remove(s);
         if (s.material?.map) s.material.map.dispose();
         if (s.material) s.material.dispose();
-      }
-      if (h && scene.children.includes(h)) {
-        scene.remove(h);
-        h.traverse((child) => {
-          if (child.geometry) child.geometry.dispose();
-          if (child.material) child.material.dispose();
-        });
       }
     }
     const list = Array.isArray(roiBoxes) ? roiBoxes : roiBoxes ? [roiBoxes] : [];
