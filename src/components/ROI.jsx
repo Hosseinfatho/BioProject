@@ -114,10 +114,13 @@ function ROI({ onPositionsChange, onRoiBoxChange, highlightedRoiIndex = null, on
 
     const sorted = [...filteredPositions].sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
     const width = container.clientWidth;
-    const height = Math.max(120, container.clientHeight);
-    const margin = { top: 20, right: 44, bottom: 36, left: 36 };
+    const height = container.clientHeight;
+    if (width <= 0 || height <= 0) return;
+
+    const margin = { top: 20, right: 44, bottom: 58, left: 36 };
     const chartWidth = width - margin.left - margin.right;
     const chartHeight = height - margin.top - margin.bottom;
+    if (chartWidth <= 0 || chartHeight <= 0) return;
 
     const svg = d3.select(svgEl);
     svg.selectAll('*').remove();
@@ -347,7 +350,7 @@ function ROI({ onPositionsChange, onRoiBoxChange, highlightedRoiIndex = null, on
         ref={chartContainerRef}
         style={{
           flex: 1,
-          minHeight: 100,
+          minHeight: 0,
           marginTop: 8,
           overflow: 'hidden',
           display: filteredPositions.length > 0 ? 'block' : 'none'

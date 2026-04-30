@@ -16,18 +16,6 @@ const REGION_DEFINITIONS = [
     ]
   },
   {
-    id: 'inflammation_high_res',
-    title: 'Inflammation (High-res)',
-    markers: ['MART1', 'MX1', 'IRF1', 'CD11c'],
-    dataSource: 'hi_res',
-    palette: [
-      [27, 158, 119],
-      [217, 95, 2],
-      [117, 112, 179],
-      [231, 41, 138]
-    ]
-  },
-  {
     id: 'immune-cells',
     title: 'Immune cells',
     markers: ['CD8a', 'CD4', 'CD15', 'CD11c', 'CD11b', 'CD103', 'CD20'],

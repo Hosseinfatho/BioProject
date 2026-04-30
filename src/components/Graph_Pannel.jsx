@@ -14,7 +14,7 @@ const BOX_COLOR_MAP = [
 
 const Graph_Pannel = ({ selectedRegionData, selectedRegionsData, channels = [], selectedRegions = [] }) => {
   const svgRef = useRef(null);
-  const containerRef = useRef(null);
+  const chartContainerRef = useRef(null);
   const [graphType, setGraphType] = useState('bar'); // 'bar', 'heatmap', 'violin'
   const [channelStats, setChannelStats] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -307,7 +307,7 @@ const Graph_Pannel = ({ selectedRegionData, selectedRegionsData, channels = [], 
     const svg = d3.select(svgRef.current);
     svg.selectAll('*').remove();
 
-    const container = containerRef.current;
+    const container = chartContainerRef.current;
     if (!container) return;
 
     const width = container.clientWidth;
@@ -504,7 +504,7 @@ const Graph_Pannel = ({ selectedRegionData, selectedRegionsData, channels = [], 
     const svg = d3.select(svgRef.current);
     svg.selectAll('*').remove();
 
-    const container = containerRef.current;
+    const container = chartContainerRef.current;
     if (!container) return;
 
     const width = container.clientWidth;
@@ -853,7 +853,7 @@ const Graph_Pannel = ({ selectedRegionData, selectedRegionsData, channels = [], 
     const svg = d3.select(svgRef.current);
     svg.selectAll('*').remove();
 
-    const container = containerRef.current;
+    const container = chartContainerRef.current;
     if (!container) return;
 
     const width = container.clientWidth;
@@ -1283,7 +1283,6 @@ const Graph_Pannel = ({ selectedRegionData, selectedRegionsData, channels = [], 
 
   return (
     <div
-      ref={containerRef}
       style={{
         height: '100%',
         width: '100%',
@@ -1417,13 +1416,13 @@ const Graph_Pannel = ({ selectedRegionData, selectedRegionsData, channels = [], 
       </div>
 
       {/* Chart Area */}
-      <div style={{
+      <div ref={chartContainerRef} style={{
         flex: 1,
         padding: '0px', // Removed padding to use full space
         overflow: 'hidden', // Changed from auto to hidden to prevent scrollbars
         position: 'relative',
         width: '100%',
-        height: '100%'
+        minHeight: 0
       }}>
         {loading && (
           <div style={{
