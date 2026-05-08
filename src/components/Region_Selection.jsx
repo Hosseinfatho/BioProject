@@ -288,7 +288,7 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
         width: '100%',
         backgroundColor: '#000000',
         border: '1px solid #444',
-        padding: '12px',
+        padding: '1px',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
@@ -301,6 +301,8 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          backgroundColor: '#333333',
+          padding: '8px 12px',
           flexShrink: 0
         }}
       >

@@ -265,7 +265,7 @@ function ROI({ onPositionsChange, onRoiBoxChange, highlightedRoiIndex = null, on
         width: '100%',
         backgroundColor: '#000000',
         border: '1px solid #444',
-        padding: '8px 12px',
+        padding: '1px',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'auto',
@@ -273,7 +273,7 @@ function ROI({ onPositionsChange, onRoiBoxChange, highlightedRoiIndex = null, on
       }}
     >
       {/* All controls in one line */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'nowrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'nowrap', backgroundColor: '#333333', padding: '8px 12px' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#fff', fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
           <input
             type="checkbox"

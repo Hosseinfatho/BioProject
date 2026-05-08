@@ -158,14 +158,14 @@ function App() {
         <Title softwareName="Melanoma Tissue Volumes" />
       </div>
 
-      {/* Main Content Area - 90.5% height, 100% width */}
+      {/* Main Content Area */}
       <div style={{
-        height: '100%',
+        flex: 1,
         width: '100%',
         display: 'flex',
         overflow: 'hidden',
         boxSizing: 'border-box',
-        flexShrink: 0
+        minHeight: 0
       }}>
         {/* Left Sidebar - 100% of main content height, 25% width */}
         <div style={{
@@ -175,7 +175,9 @@ function App() {
           flexDirection: 'column',
           overflow: 'hidden',
           boxSizing: 'border-box',
-          flexShrink: 0
+          flexShrink: 0,
+          minWidth: 0,
+          minHeight: 0
         }}>
           {/* Channel Selection - 45% of sidebar height */}
           <div style={{
@@ -183,7 +185,8 @@ function App() {
             width: '100%',
             overflow: 'hidden',
             boxSizing: 'border-box',
-            flexShrink: 0
+            flexShrink: 0,
+            minHeight: 0
           }}>
             <ChannelSelection
               onChannelsChange={handleChannelsChange}
@@ -197,7 +200,8 @@ function App() {
             width: '100%',
             overflow: 'hidden',
             boxSizing: 'border-box',
-            flexShrink: 0
+            flexShrink: 0,
+            minHeight: 0
           }}>
             <Region_Selection
               onToggleRegion={handleRegionToggle}
@@ -214,7 +218,9 @@ function App() {
           flexDirection: 'column',
           overflow: 'hidden',
           boxSizing: 'border-box',
-          flexShrink: 0
+          flexShrink: 0,
+          minWidth: 0,
+          minHeight: 0
         }}>
           {/* Main View - 68% height */}
           <div style={{
@@ -222,7 +228,8 @@ function App() {
             width: '100%',
             overflow: 'hidden',
             boxSizing: 'border-box',
-            flexShrink: 0
+            flexShrink: 0,
+            minHeight: 0
           }}>
             <Main_View
               channels={channels}
@@ -242,15 +249,16 @@ function App() {
             display: 'flex',
             overflow: 'hidden',
             boxSizing: 'border-box',
-            flexShrink: 0
+            flexShrink: 0,
+            minHeight: 0
           }}>
-            {/* Local View - 33.3% width */}
+            {/* Local View */}
             <div style={{
-              width: '33.3%',
+              flex: 1,
               height: '100%',
               overflow: 'hidden',
               boxSizing: 'border-box',
-              flexShrink: 0
+              minWidth: 0
             }}>
               <Local_View 
                 selectedRegionsData={selectedRegionsData} 
@@ -258,13 +266,13 @@ function App() {
                 onRegionRemove={handleRegionRemove}
               />
             </div>
-            {/* Graph Panel - 33.3% width */}
+            {/* Graph Panel */}
             <div style={{
-              width: '33.3%',
+              flex: 1,
               height: '100%',
               overflow: 'hidden',
               boxSizing: 'border-box',
-              flexShrink: 0
+              minWidth: 0
             }}>
               <Graph_Pannel 
                 key={selectedRegionsData.map(r => r.id).join('-') || 'empty'} 
@@ -273,13 +281,13 @@ function App() {
                 selectedRegions={selectedRegions}
               />
             </div>
-            {/* Direction View - 33.3% width */}
+            {/* Direction View */}
             <div style={{
-              width: '33.3%',
+              flex: 1,
               height: '100%',
               overflow: 'hidden',
               boxSizing: 'border-box',
-              flexShrink: 0
+              minWidth: 0
             }}>
               <ROI
                 onPositionsChange={setRoiPositions}

@@ -7,9 +7,9 @@ const Title = ({ softwareName = "Software Name (title)" }) => {
   return (
     <>
       <div style={{
-        flex: '5%',
+        height: '100%',
         width: '100%',
-        backgroundColor: '#000000',
+        backgroundColor: '#333333',
         color: 'white',
         display: 'flex',
         alignItems: 'center',
@@ -17,7 +17,8 @@ const Title = ({ softwareName = "Software Name (title)" }) => {
         fontSize: '24px',
         fontWeight: 'bold',
         borderBottom: '2px solid #34495e',
-        position: 'relative'
+        position: 'relative',
+        boxSizing: 'border-box'
       }}>
         {softwareName}
         

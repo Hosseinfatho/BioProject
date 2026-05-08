@@ -472,7 +472,7 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
       width: '100%',
       backgroundColor: '#000000',
       border: '1px solid #444',
-      padding: '10px',
+      padding: '1px',
       display: 'flex',
       flexDirection: 'column',
       fontSize: '10px',
@@ -485,7 +485,8 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
         alignItems: 'center',
         justifyContent: 'space-between',
         marginBottom: '12px',
-        paddingBottom: '12px',
+        padding: '8px 12px',
+        backgroundColor: '#333333',
         borderBottom: '1px solid #444'
       }}>
         <h3 style={{ margin: 0, fontSize: '16px', color: 'white', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1054,9 +1055,7 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
               ? 'pointer'
               : 'default',
             fontSize: '11px',
-            fontWeight: '500',
-            textTransform: 'uppercase',
-            letterSpacing: '0.4px'
+            fontWeight: '500'
           }}
         >
           Apply Filter

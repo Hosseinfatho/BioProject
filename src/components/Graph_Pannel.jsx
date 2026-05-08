@@ -1301,7 +1301,7 @@ const Graph_Pannel = ({ selectedRegionData, selectedRegionsData, channels = [], 
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: '8px 12px',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: '#333333',
         borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
         flexShrink: 0,
         zIndex: 10

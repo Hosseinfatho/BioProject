@@ -962,6 +962,8 @@ const LocalViewContent = ({ selectedRegionData, channels = [], onCloseTab, regio
         top: '5px',
         left: '10px',
         zIndex: 100,
+        backgroundColor: '#333333',
+        padding: '8px 12px',
         display: 'flex',
         alignItems: 'center',
         gap: '8px'
@@ -1310,7 +1312,7 @@ const Local_View = ({ selectedRegionsData, selectedRegionData, channels = [], on
       {/* Tabs Header */}
       <div style={{
         display: 'flex',
-        backgroundColor: '#1a1a1a',
+        backgroundColor: '#333333',
         borderBottom: '1px solid #444',
         padding: '0',
         overflowX: 'auto',
