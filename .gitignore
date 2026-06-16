@@ -32,3 +32,4 @@ VIS2026/Hi_res/Hi_res_dataset/data.npy
 /VIS2026/Hi_res/preprocessed_Hi_res_infal_2688_3456
 /VIS2026/Hi_res_128_128_194/subgraphs_Tile_gat_128_128_194/Inflammation
 /VIS2026/Hi_res_128_128_194/preprocessed_Tile_gat_128_128_194
+*.zip
