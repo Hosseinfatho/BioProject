@@ -1,0 +1,24 @@
+# Dependencies & build artifacts
+node_modules
+dist
+.git
+.vscode
+.idea
+__pycache__
+*.pyc
+*.ipynb
+general.ipynb
+
+# Huge local datasets (mounted as volumes on the server instead)
+visualization_data
+visualization_data_lo
+Data
+downloadData
+VIS2026/Hi_res/Hi_res_dataset
+VIS2026/Hi_res/HI_res_channel.rar
+VIS2026/Hi_res_128_128_194
+VIS2026/**/*.raw
+VIS2026/**/*.npy
+VIS2026/**/*.zarr
+
+# Keep small JSON under VIS2026/output in the sync (not ignored here for rsync filters)

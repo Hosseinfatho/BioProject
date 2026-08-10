@@ -1,0 +1,15 @@
+{
+  "shape": [
+    194,
+    512,
+    512
+  ],
+  "dataRange": [
+    0.0,
+    34381.0
+  ],
+  "downsampleFactor": 1,
+  "channel": 0,
+  "channelName": "MART1",
+  "source": "D:\\VIS2026\\Hossein\\BioProject\\VIS2026\\Hi_res\\Hi_res_dataset"
+}

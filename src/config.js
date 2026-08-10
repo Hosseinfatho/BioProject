@@ -1,6 +1,9 @@
 export const CONFIG = {
+    /** Default / region presets: higher-res pyramid (S3 component 4) */
     VISUALIZATION_DATA_DIR: 'visualization_data',
-    /** Channel .raw + metadata from preparation_high_res.py (VIS2026/Hi_res/HI_res_channel) */
+    /** Manually added channels via "+ Add Channel": lower-res pyramid (S3 component 5) */
+    LOW_RES_CHANNEL_DIR: 'visualization_data_lo',
+    /** Optional window crop from preparation_high_res.py */
     HI_RES_CHANNEL_DIR: 'VIS2026/Hi_res/HI_res_channel',
     DATA_DIR: 'Data',
     // ROI positions: path to output folder (relative to BASE_URL)

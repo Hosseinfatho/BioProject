@@ -1,0 +1,17 @@
+services:
+  congat:
+    build:
+      context: .
+      args:
+        VITE_BASE_PATH: /congat/
+    image: congat-melanoma:latest
+    container_name: congat
+    restart: unless-stopped
+    ports:
+      # Host 9595 → container nginx :80  → https://arcade.evl.uic.edu/congat
+      - "9595:80"
+    volumes:
+      - ./visualization_data:/usr/share/nginx/html/congat/visualization_data:ro
+      - ./visualization_data_lo:/usr/share/nginx/html/congat/visualization_data_lo:ro
+      - ./VIS2026/output:/usr/share/nginx/html/congat/VIS2026/output:ro
+      - ./VIS2026/Hi_res/HI_res_channel:/usr/share/nginx/html/congat/VIS2026/Hi_res/HI_res_channel:ro

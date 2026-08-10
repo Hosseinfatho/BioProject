@@ -57,6 +57,36 @@ npm run preview
 npm start
 ```
 
+### Docker (arcade.evl.uic.edu)
+
+Public URL: **https://arcade.evl.uic.edu/congat** (container listens on host port **9595**).
+
+1. Make sure SSH works: `ssh arcade.evl.uic.edu`
+2. From the project root, deploy (syncs code + channel data, then builds on the server):
+
+```powershell
+.\deploy.ps1
+```
+
+Or with an explicit username:
+
+```powershell
+.\deploy.ps1 -User YOUR_NETID
+```
+
+App-only rebuild (skip ~4GB data sync):
+
+```powershell
+.\deploy.ps1 -SkipData
+```
+
+Local smoke-test:
+
+```bash
+docker compose up -d --build
+# http://localhost:9595/congat/
+```
+
 ## Components
 
 ### Main View

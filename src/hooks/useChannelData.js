@@ -31,14 +31,13 @@ export const loadChannelData = async (channelIndex, options = {}) => {
         return globalChannelCache.get(cacheKey);
     }
 
+    const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
     const dir = basePath || CONFIG.VISUALIZATION_DATA_DIR;
+    const prefix = `${baseUrl}/${dir}`;
     const paths = [
-        { data: `./${dir}/channel_${channelIndex}_napari_data.raw`, metadata: `./${dir}/channel_${channelIndex}_napari_metadata.json` },
-        { data: `${dir}/channel_${channelIndex}_napari_data.raw`, metadata: `${dir}/channel_${channelIndex}_napari_metadata.json` },
-        { data: `./${dir}/channel_${channelIndex}_data.raw`, metadata: `./${dir}/channel_${channelIndex}_data.json` },
-        { data: `${dir}/channel_${channelIndex}_data.raw`, metadata: `${dir}/channel_${channelIndex}_data.json` },
-        { data: `./${dir}/channel_${channelIndex}_data.raw`, metadata: `./${dir}/channel_${channelIndex}_metadata.json` },
-        { data: `${dir}/channel_${channelIndex}_data.raw`, metadata: `${dir}/channel_${channelIndex}_metadata.json` }
+        { data: `${prefix}/channel_${channelIndex}_napari_data.raw`, metadata: `${prefix}/channel_${channelIndex}_napari_metadata.json` },
+        { data: `${prefix}/channel_${channelIndex}_data.raw`, metadata: `${prefix}/channel_${channelIndex}_data.json` },
+        { data: `${prefix}/channel_${channelIndex}_data.raw`, metadata: `${prefix}/channel_${channelIndex}_metadata.json` }
     ];
 
     for (const path of paths) {
@@ -68,6 +67,16 @@ export const loadChannelData = async (channelIndex, options = {}) => {
             return result;
         } catch (error) {
             continue;
+        }
+    }
+
+    // If high-res default is missing, fall back to low-res (e.g. while export is incomplete)
+    const lowResDir = CONFIG.LOW_RES_CHANNEL_DIR;
+    if (!basePath && lowResDir && dir !== lowResDir) {
+        const fallback = await loadChannelData(channelIndex, { basePath: lowResDir });
+        if (fallback) {
+            globalChannelCache.set(cacheKey, fallback);
+            return fallback;
         }
     }
 

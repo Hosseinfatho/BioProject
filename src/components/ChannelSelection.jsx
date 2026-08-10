@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import channelNamesData from '../channel_names.json';
+import { CONFIG } from '../config';
 
 // Generate channel options (0-69 based on data shape)
 const CHANNEL_COUNT = 70;
@@ -75,7 +76,7 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
   }, []);
 
   const channelIndexKey = useMemo(
-    () => channels.map((c) => c.channelIndex).join(','),
+    () => channels.map((c) => `${c.channelBasePath || 'hi'}:${c.channelIndex}`).join(','),
     [channels]
   );
 
@@ -153,15 +154,16 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
 
       for (const channel of channels) {
         const channelIndex = channel.channelIndex;
-        if (ranges[channelIndex]) continue;
+        const dir = channel.channelBasePath || CONFIG.VISUALIZATION_DATA_DIR || 'visualization_data';
+        const rangeKey = `${dir}:${channelIndex}`;
+        if (ranges[rangeKey]) continue;
 
+        const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+        const prefix = `${baseUrl}/${dir}`;
         const paths = [
-          `./visualization_data/channel_${channelIndex}_napari_metadata.json`,
-          `visualization_data/channel_${channelIndex}_napari_metadata.json`,
-          `./visualization_data/channel_${channelIndex}_data.json`,
-          `visualization_data/channel_${channelIndex}_data.json`,
-          `./visualization_data/channel_${channelIndex}_metadata.json`,
-          `visualization_data/channel_${channelIndex}_metadata.json`
+          `${prefix}/channel_${channelIndex}_napari_metadata.json`,
+          `${prefix}/channel_${channelIndex}_data.json`,
+          `${prefix}/channel_${channelIndex}_metadata.json`
         ];
 
         for (const path of paths) {
@@ -170,8 +172,12 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
             if (response.ok) {
               const metadata = await response.json();
               const dataRange = metadata.dataRange || [0, 65535];
-              ranges[channelIndex] = dataRange;
-              console.log(`Channel ${channelIndex}: Data range [${dataRange[0]}, ${dataRange[1]}]`);
+              ranges[rangeKey] = dataRange;
+              // Keep index-only key for high-res defaults (no basePath)
+              if (!channel.channelBasePath) {
+                ranges[channelIndex] = dataRange;
+              }
+              console.log(`Channel ${channelIndex} (${dir}): Data range [${dataRange[0]}, ${dataRange[1]}]`);
               changed = true;
               break;
             }
@@ -180,10 +186,13 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
           }
         }
 
-        if (!ranges[channelIndex]) {
-          ranges[channelIndex] = [0, 65535];
+        if (!ranges[rangeKey]) {
+          ranges[rangeKey] = [0, 65535];
+          if (!channel.channelBasePath) {
+            ranges[channelIndex] = [0, 65535];
+          }
           changed = true;
-          console.log(`Channel ${channelIndex}: Using default data range [0, 65535]`);
+          console.log(`Channel ${channelIndex} (${dir}): Using default data range [0, 65535]`);
         }
       }
 
@@ -191,7 +200,9 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
         setChannelRanges(ranges);
         setChannels((prev) =>
           prev.map((channel) => {
-            const range = ranges[channel.channelIndex] || [0, 65535];
+            const dir = channel.channelBasePath || CONFIG.VISUALIZATION_DATA_DIR || 'visualization_data';
+            const rangeKey = `${dir}:${channel.channelIndex}`;
+            const range = ranges[rangeKey] || ranges[channel.channelIndex] || [0, 65535];
             if (
               channel.dataRange &&
               channel.dataRange[0] === range[0] &&
@@ -258,15 +269,17 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
     const maxId = numericIds.length > 0 ? Math.max(...numericIds) : -1;
     const newId = maxId + 1;
 
-    // Try to load data range for channel 0
+    // Manually added channels use lower-resolution data for faster loading
+    const channelBasePath = CONFIG.LOW_RES_CHANNEL_DIR || 'visualization_data_lo';
     let dataRange = [0, 65535];
+    const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
     const paths = [
-      `./visualization_data/channel_0_napari_metadata.json`,
-      `visualization_data/channel_0_napari_metadata.json`,
-      `./visualization_data/channel_0_data.json`,
-      `visualization_data/channel_0_data.json`,
-      `./visualization_data/channel_0_metadata.json`,
-      `visualization_data/channel_0_metadata.json`
+      `${baseUrl}/${channelBasePath}/channel_0_napari_metadata.json`,
+      `${baseUrl}/${channelBasePath}/channel_0_data.json`,
+      `${baseUrl}/${channelBasePath}/channel_0_metadata.json`,
+      // Fallback to high-res if low-res not exported yet
+      `${baseUrl}/${CONFIG.VISUALIZATION_DATA_DIR}/channel_0_metadata.json`,
+      `${baseUrl}/${CONFIG.VISUALIZATION_DATA_DIR}/channel_0_data.json`
     ];
 
     for (const path of paths) {
@@ -289,6 +302,7 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
     const newChannel = {
       id: newId,
       channelIndex: 0,
+      channelBasePath,
       color: '#00ff88',  // Default to bright green - much more visible than white
       thresholdMin: defaultMin,
       thresholdMax: defaultMax,
@@ -328,10 +342,13 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
       if (channel.id === id) {
         const updated = { ...channel, [field]: value };
 
-        // If channel index changed, update data range
+        // If channel index changed, update data range (same resolution folder as this row)
         if (field === 'channelIndex') {
           const newIndex = parseInt(value);
-          const range = channelRanges[newIndex] || [0, 65535];
+          const rangeKey = channel.channelBasePath
+            ? `${channel.channelBasePath}:${newIndex}`
+            : String(newIndex);
+          const range = channelRanges[rangeKey] || channelRanges[newIndex] || [0, 65535];
           updated.dataRange = range;
           const rangeSpan = range[1] - range[0];
           updated.thresholdMin = Math.round(range[0] + rangeSpan * DEFAULT_THRESHOLD_MIN_FRACTION);

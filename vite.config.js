@@ -8,10 +8,11 @@ const serveOutputPlugin = {
   name: 'serve-output',
   configureServer(server) {
     server.middlewares.use((req, res, next) => {
-      const visualizationMatch = req.url.match(/(?:\/BioProject)?\/visualization_data\/(.+)$/)
+      const visualizationMatch = req.url.match(/(?:\/BioProject)?\/(visualization_data_lo|visualization_data)\/(.+)$/)
       if (visualizationMatch) {
-        const subPath = visualizationMatch[1].split('?')[0]
-        const fullPath = path.join(process.cwd(), 'visualization_data', subPath)
+        const dirName = visualizationMatch[1]
+        const subPath = visualizationMatch[2].split('?')[0]
+        const fullPath = path.join(process.cwd(), dirName, subPath)
         if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
           if (subPath.endsWith('.json')) res.setHeader('Content-Type', 'application/json')
           else if (subPath.endsWith('.raw')) res.setHeader('Content-Type', 'application/octet-stream')
@@ -47,7 +48,8 @@ const serveOutputPlugin = {
 
 export default defineConfig({
   plugins: [react(), serveOutputPlugin],
-  base: '/BioProject/',
+  // Local/GitHub Pages: /BioProject/ ; Docker on arcade: /congat/
+  base: process.env.VITE_BASE_PATH || '/BioProject/',
   server: {
     port: 3000,
     watch: {

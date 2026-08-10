@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 # Config
 # ---------------------------------------------------------------------------
 HI_RES_DATASET_DIR = Path(__file__).resolve().parent / "Hi_res" / "Hi_res_dataset"
-OUTPUT_DIR = Path(r"D:\VIS2026\Hossein\BioProject\VIS2026\Hi_res\HI_res_channel")
+OUTPUT_DIR = Path(__file__).resolve().parent / "Hi_res" / "HI_res_channel"
 
 # Optional: downsample factor 1 = full res; 2 = half in z,y,x
 DOWNSAMPLE = 1

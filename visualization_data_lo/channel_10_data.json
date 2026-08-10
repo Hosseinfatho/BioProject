@@ -1,0 +1,17 @@
+{
+  "shape": [
+    194,
+    172,
+    340
+  ],
+  "dataRange": [
+    0,
+    3858
+  ],
+  "downsampleFactor": 1,
+  "channel": 10,
+  "source": {
+    "url": "s3://lsp-public-data/biomedvis-challenge-2025/Dataset1-LSP13626-melanoma-in-situ/0",
+    "component": "5"
+  }
+}
