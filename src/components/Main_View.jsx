@@ -139,11 +139,11 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
 
   const cameraStateRef = useRef({ ...CAMERA_INITIAL_STATE });
 
+  // Keep denser voxels when zoomed; only thin out when far away
   const getDesiredSampling = useCallback((distance = 3) => {
-    if (distance >= 8) return 6;
-    if (distance >= 5.5) return 4;
-    if (distance >= 3.5) return 3;
-    if (distance >= 2) return 2;
+    if (distance >= 10) return 4;
+    if (distance >= 6) return 3;
+    if (distance >= 3.5) return 2;
     return 1;
   }, []);
 
@@ -189,8 +189,9 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     if (estimatedPassing > MAX_POINTS_PER_CHANNEL) {
       const ratio = estimatedPassing / MAX_POINTS_PER_CHANNEL;
       sampling = Math.max(2, Math.ceil(Math.cbrt(Math.max(ratio, 1) * 2)));
-      if (totalVoxels > 20000000) {
-        sampling = Math.max(sampling, 4);
+      // Only force heavier thinning on extremely large volumes
+      if (totalVoxels > 80000000) {
+        sampling = Math.max(sampling, 2);
       }
     }
 

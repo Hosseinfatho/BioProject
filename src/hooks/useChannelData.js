@@ -70,14 +70,13 @@ export const loadChannelData = async (channelIndex, options = {}) => {
         }
     }
 
-    // If high-res default is missing, fall back to low-res (e.g. while export is incomplete)
+    // Prefer high-res; if missing, try low-res but do NOT cache it under the high-res key
     const lowResDir = CONFIG.LOW_RES_CHANNEL_DIR;
     if (!basePath && lowResDir && dir !== lowResDir) {
-        const fallback = await loadChannelData(channelIndex, { basePath: lowResDir });
-        if (fallback) {
-            globalChannelCache.set(cacheKey, fallback);
-            return fallback;
-        }
+        console.warn(
+            `High-res missing for channel ${channelIndex} in ${dir}; trying low-res ${lowResDir} (not cached as high-res)`
+        );
+        return loadChannelData(channelIndex, { basePath: lowResDir });
     }
 
     console.warn(`Failed to load data for channel ${channelIndex}${basePath ? ` (${basePath})` : ''}`);

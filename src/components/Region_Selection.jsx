@@ -161,24 +161,24 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
 
   const buildRegionPayload = (region) => {
     const topMarkers = region.markers.slice(0, 4);
-    const isHiRes = region.dataSource === 'hi_res';
-    const channelBasePath = isHiRes ? CONFIG.HI_RES_CHANNEL_DIR : undefined;
+    // Default regions always use high-res channel volumes
+    const channelBasePath = CONFIG.VISUALIZATION_DATA_DIR;
 
     const channelConfigs = topMarkers
       .map((marker, index) => {
-        const channelIndex = isHiRes ? index : resolveChannelIndex(marker);
+        const channelIndex = resolveChannelIndex(marker);
         const paletteColor = region.palette[index] || region.palette[region.palette.length - 1];
         const colorHex = Array.isArray(paletteColor)
           ? rgbToHex(paletteColor[0], paletteColor[1], paletteColor[2])
           : '#ffffff';
 
-        if (!isHiRes && (channelIndex === null || channelIndex === undefined)) {
+        if (channelIndex === null || channelIndex === undefined) {
           return null;
         }
 
         return {
-          id: `${region.id}-${channelIndex ?? index}`,
-          channelIndex: channelIndex ?? index,
+          id: `${region.id}-${channelIndex}`,
+          channelIndex,
           color: colorHex,
           thresholdMin: undefined,
           thresholdMax: undefined,
@@ -186,7 +186,7 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
           visible: true,
           markerName: marker,
           regionId: region.id,
-          ...(channelBasePath && { channelBasePath })
+          channelBasePath
         };
       })
       .filter(Boolean);

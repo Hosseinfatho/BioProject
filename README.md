@@ -87,6 +87,8 @@ docker compose up -d --build
 # http://localhost:9595/congat/
 ```
 
+Port mapping: host **9595** → container **9595** (nginx).
+
 ## Components
 
 ### Main View

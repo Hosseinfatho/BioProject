@@ -1,5 +1,5 @@
 export const CONFIG = {
-    /** Default / region presets: higher-res pyramid (S3 component 4) */
+    /** Default / region presets: higher-res pyramid (S3 component 3 ≈ 194×688×1363) */
     VISUALIZATION_DATA_DIR: 'visualization_data',
     /** Manually added channels via "+ Add Channel": lower-res pyramid (S3 component 5) */
     LOW_RES_CHANNEL_DIR: 'visualization_data_lo',
