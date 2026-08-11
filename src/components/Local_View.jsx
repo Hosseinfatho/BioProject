@@ -6,7 +6,7 @@ import { useTheme } from '../theme.jsx';
 const OPACITY_FLOOR = 0.35;
 const OPACITY_BOOST = 1.3;
 const EDGE_FEATHER = 0.99;
-const JITTER_SCALE = 0.1;
+const JITTER_SCALE = 0;
 
 const VOXEL_FRAGMENT_SHADER = `
   uniform vec3 color;

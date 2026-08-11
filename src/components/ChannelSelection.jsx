@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import channelNamesData from '../channel_names.json';
 import { CONFIG } from '../config';
+import { useDataResolution } from '../dataResolution.jsx';
 
 // Generate channel options (0-69 based on data shape)
 const CHANNEL_COUNT = 70;
@@ -18,6 +19,7 @@ const rgbToHex = (r, g, b) => {
 };
 
 const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion = 0 }) => {
+  const { channelDataDir, isLowRes, toggleResolution } = useDataResolution();
   const [channels, setChannels] = useState([]);
   const presetVersionRef = useRef(null);
   const presetChannelsRef = useRef(presetChannels);
@@ -154,7 +156,7 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
 
       for (const channel of channels) {
         const channelIndex = channel.channelIndex;
-        const dir = channel.channelBasePath || CONFIG.VISUALIZATION_DATA_DIR || 'visualization_data';
+        const dir = channel.channelBasePath || channelDataDir;
         const rangeKey = `${dir}:${channelIndex}`;
         if (ranges[rangeKey]) continue;
 
@@ -200,7 +202,7 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
         setChannelRanges(ranges);
         setChannels((prev) =>
           prev.map((channel) => {
-            const dir = channel.channelBasePath || CONFIG.VISUALIZATION_DATA_DIR || 'visualization_data';
+            const dir = channel.channelBasePath || channelDataDir;
             const rangeKey = `${dir}:${channel.channelIndex}`;
             const range = ranges[rangeKey] || ranges[channel.channelIndex] || [0, 65535];
             if (
@@ -269,17 +271,22 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
     const maxId = numericIds.length > 0 ? Math.max(...numericIds) : -1;
     const newId = maxId + 1;
 
-    // Manually added channels use lower-resolution data for faster loading
-    const channelBasePath = CONFIG.LOW_RES_CHANNEL_DIR || 'visualization_data_lo';
+    // Follow Low/High Res toggle (default Low Res = visualization_data_low)
+    const channelBasePath = channelDataDir;
     let dataRange = [0, 65535];
     const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+    const otherDir = isLowRes
+      ? (CONFIG.VISUALIZATION_DATA_DIR || 'visualization_data')
+      : (CONFIG.LOW_RES_CHANNEL_DIR || 'visualization_data_low');
+    const altLow = CONFIG.LOW_RES_CHANNEL_DIR_ALT || 'visualization_data_lo';
     const paths = [
       `${baseUrl}/${channelBasePath}/channel_0_napari_metadata.json`,
       `${baseUrl}/${channelBasePath}/channel_0_data.json`,
       `${baseUrl}/${channelBasePath}/channel_0_metadata.json`,
-      // Fallback to high-res if low-res not exported yet
-      `${baseUrl}/${CONFIG.VISUALIZATION_DATA_DIR}/channel_0_metadata.json`,
-      `${baseUrl}/${CONFIG.VISUALIZATION_DATA_DIR}/channel_0_data.json`
+      // Fallback to the other resolution / alt low-res folder name
+      `${baseUrl}/${otherDir}/channel_0_napari_metadata.json`,
+      `${baseUrl}/${otherDir}/channel_0_metadata.json`,
+      `${baseUrl}/${altLow}/channel_0_metadata.json`
     ];
 
     for (const path of paths) {
@@ -485,16 +492,17 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
 
   return (
     <div style={{
-      height: '100%',
+      height: 'auto',
       width: '100%',
       backgroundColor: 'var(--panel-bg, #000000)',
       border: '1px solid var(--border-color, #444)',
+      borderBottom: 'none',
       padding: '1px',
       display: 'flex',
       flexDirection: 'column',
       fontSize: '10px',
       boxSizing: 'border-box',
-      overflow: 'hidden',
+      overflow: 'visible',
       color: 'var(--text-color, #ffffff)'
     }}>
       {/* Header */}
@@ -502,12 +510,14 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
+        gap: '8px',
         marginBottom: '12px',
         padding: '8px 12px',
         backgroundColor: 'var(--header-bg, #333333)',
-        borderBottom: '1px solid var(--border-color, #444)'
+        borderBottom: '1px solid var(--border-color, #444)',
+        flexShrink: 0
       }}>
-        <h3 style={{ margin: 0, fontSize: '16px', color: 'var(--text-color, white)', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <h3 style={{ margin: 0, fontSize: '16px', color: 'var(--text-color, white)', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
           Channel Selection
           {/* Help Button */}
           <button
@@ -525,7 +535,8 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
               alignItems: 'center',
               justifyContent: 'center',
               padding: 0,
-              transition: 'all 0.2s'
+              transition: 'all 0.2s',
+              flexShrink: 0
             }}
             onMouseEnter={(e) => {
               e.target.style.background = 'rgba(255, 255, 255, 0.1)';
@@ -540,6 +551,81 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
             ?
           </button>
         </h3>
+
+        {/* Low Res / High Res toggle — right side of Channel Selection header */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={!isLowRes}
+          onClick={toggleResolution}
+          title={isLowRes ? 'Switch to High Res volumes' : 'Switch to Low Res volumes'}
+          aria-label="Toggle low and high resolution data"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: 0,
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            color: 'var(--text-color, #ffffff)',
+            flexShrink: 0
+          }}
+        >
+          <span
+            style={{
+              fontSize: '10px',
+              fontWeight: 700,
+              letterSpacing: '0.03em',
+              color: isLowRes ? 'var(--text-color, #fff)' : 'var(--text-muted, #888)',
+              opacity: isLowRes ? 1 : 0.55,
+              whiteSpace: 'nowrap'
+            }}
+          >
+            Low Res
+          </span>
+          <span
+            style={{
+              position: 'relative',
+              width: '40px',
+              height: '20px',
+              borderRadius: '999px',
+              backgroundColor: isLowRes ? '#3a3a3a' : '#2e7d32',
+              border: '1px solid var(--border-strong, #666)',
+              boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.25)',
+              flexShrink: 0,
+              transition: 'background-color 0.25s'
+            }}
+          >
+            <span
+              style={{
+                position: 'absolute',
+                top: '1px',
+                left: isLowRes ? '1px' : '19px',
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                backgroundColor: isLowRes ? '#ffffff' : '#c8e6c9',
+                border: `1px solid ${isLowRes ? '#bbb' : '#81c784'}`,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.35)',
+                transition: 'left 0.22s ease, background-color 0.22s'
+              }}
+            />
+          </span>
+          <span
+            style={{
+              fontSize: '10px',
+              fontWeight: 700,
+              letterSpacing: '0.03em',
+              color: isLowRes ? 'var(--text-muted, #888)' : 'var(--text-color, #fff)',
+              opacity: isLowRes ? 0.55 : 1,
+              whiteSpace: 'nowrap'
+            }}
+          >
+            High Res
+          </span>
+        </button>
       </div>
 
       {/* Help Panel - Black & Green Theme */}
@@ -674,8 +760,8 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
         </div>
       )}
 
-      {/* Channel List */}
-      <div style={{ flex: 1, overflowY: 'auto', marginBottom: '12px' }}>
+      {/* Channel List — grows with content; parent scrolls after 60% height */}
+      <div style={{ marginBottom: '12px', flexShrink: 0 }}>
         {channels.map((channel, index) => {
           const rgb = hexToRgb(channel.color);
           const checkboxColor = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
@@ -1016,7 +1102,7 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
       </div>
 
       {/* Add Channel Button */}
-      <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+      <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexShrink: 0, paddingBottom: '4px' }}>
         <button
           onClick={addChannel}
           style={{

@@ -70,11 +70,20 @@ export const loadChannelData = async (channelIndex, options = {}) => {
         }
     }
 
-    // Prefer high-res; if missing, try low-res but do NOT cache it under the high-res key
+    // Local folder is visualization_data_low; some deploys use visualization_data_lo
     const lowResDir = CONFIG.LOW_RES_CHANNEL_DIR;
+    const lowResAlt = CONFIG.LOW_RES_CHANNEL_DIR_ALT;
+
+    if (basePath && lowResDir && lowResAlt && basePath === lowResDir) {
+        console.warn(
+            `Missing channel ${channelIndex} in ${basePath}; trying ${lowResAlt}`
+        );
+        return loadChannelData(channelIndex, { basePath: lowResAlt });
+    }
+
     if (!basePath && lowResDir && dir !== lowResDir) {
         console.warn(
-            `High-res missing for channel ${channelIndex} in ${dir}; trying low-res ${lowResDir} (not cached as high-res)`
+            `High-res missing for channel ${channelIndex} in ${dir}; trying low-res ${lowResDir}`
         );
         return loadChannelData(channelIndex, { basePath: lowResDir });
     }

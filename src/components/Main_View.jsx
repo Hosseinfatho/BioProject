@@ -23,11 +23,17 @@ const cloneCameraState = (state = CAMERA_INITIAL_STATE) => ({
 const MOVE_SPEED = 0.05;
 const FAST_MOVE_SPEED = 0.15;
 const LOD_COOLDOWN_MS = 200;
-const MAX_POINTS_PER_CHANNEL = 200000000;
+/**
+ * Max rendered voxels per channel (after threshold).
+ * Server / high-quality: set very high so 1–2 high-res channels keep sampling=1.
+ * Full high-res volume is ~182M voxels; this cap sits above that.
+ */
+const MAX_POINTS_PER_CHANNEL = 500000000;
 const OPACITY_FLOOR = 0.35;
 const OPACITY_BOOST = 1.3;
 const EDGE_FEATHER = 0.99;
-const JITTER_SCALE = 0.1;
+/** 0 = sharp grid (best resolution look). */
+const JITTER_SCALE = 0;
 const AMBIENT_COLOR = new THREE.Color(0.9, 0.9, 0.95);
 const DEFAULT_THRESHOLD_MIN_FRACTION = 0.03;
 const DEFAULT_THRESHOLD_MAX_FRACTION = 0.9;
@@ -115,7 +121,9 @@ const getConfigSignature = (config) =>
     config.thresholdMin ?? '',
     config.thresholdMax ?? '',
     config.color ?? '',
-    config.opacity ?? ''
+    config.opacity ?? '',
+    config.channelBasePath ?? '',
+    config.channelIndex ?? ''
   ].join('|');
 
 // Position space in ROI JSON uses grid index × 16; same as 60_model.py coord_scale
@@ -174,13 +182,9 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
 
   const cameraStateRef = useRef(cloneCameraState());
 
-  // Keep denser voxels when zoomed; only thin out when far away
-  const getDesiredSampling = useCallback((distance = 3) => {
-    if (distance >= 10) return 4;
-    if (distance >= 6) return 3;
-    if (distance >= 3.5) return 2;
-    return 1;
-  }, []);
+  // Always prefer full voxel resolution on server (sampling=1).
+  // Distance-based thinning disabled so 1–2 channels stay at highest quality.
+  const getDesiredSampling = useCallback((_distance = 3) => 1, []);
 
   const createChannelVisualization = useCallback((channelData, channelConfig, samplingOverride) => {
     if (!channelData || !channelConfig) return null;
@@ -218,24 +222,17 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     const scaleZ = (zSize / maxDim) / 4;
 
     const totalVoxels = zSize * ySize * xSize;
-    const estimatedPassing = totalVoxels * 0.08;
     let sampling = 1;
 
+    // Only thin if we would truly exceed the GPU budget (rare with 500M cap)
+    const estimatedPassing = totalVoxels * 0.08;
     if (estimatedPassing > MAX_POINTS_PER_CHANNEL) {
       const ratio = estimatedPassing / MAX_POINTS_PER_CHANNEL;
-      sampling = Math.max(2, Math.ceil(Math.cbrt(Math.max(ratio, 1) * 2)));
-      // Only force heavier thinning on extremely large volumes
-      if (totalVoxels > 80000000) {
-        sampling = Math.max(sampling, 2);
-      }
+      sampling = Math.max(2, Math.ceil(Math.cbrt(Math.max(ratio, 1))));
     }
+    // samplingOverride ignored — always keep highest resolution under budget
 
-    if (samplingOverride !== undefined) {
-      const overrideValue = Math.max(1, Math.round(samplingOverride));
-      sampling = Math.max(sampling, overrideValue);
-    }
-
-    console.log(`Channel visualization: shape=${metadata.shape}, sampling=${sampling}, totalVoxels=${totalVoxels}`);
+    console.log(`Channel visualization: shape=${metadata.shape}, sampling=${sampling}, totalVoxels=${totalVoxels}, maxPoints=${MAX_POINTS_PER_CHANNEL}`);
     console.log(`Channel ${channelConfig.channelIndex}: Data range [${dataMin}, ${dataMax}], Threshold range [${minThreshold}, ${maxThreshold}]`);
 
     const stepX = (2 / xSize) * scaleX * sampling;

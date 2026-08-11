@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import channelNamesData from '../channel_names.json';
 import { CONFIG } from '../config';
+import { useDataResolution } from '../dataResolution.jsx';
 
 // Microenvironments and channels aligned with 60_model.py / config (ROI positions)
 const REGION_DEFINITIONS = [
@@ -120,6 +121,7 @@ const buildLookupTables = (names) => {
 };
 
 const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
+  const { channelDataDir } = useDataResolution();
   const [activeTab, setActiveTab] = useState('single'); // 'single', 'two', 'three'
 
   const lookupTables = useMemo(
@@ -161,8 +163,8 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
 
   const buildRegionPayload = (region) => {
     const topMarkers = region.markers.slice(0, 4);
-    // Default regions always use high-res channel volumes
-    const channelBasePath = CONFIG.VISUALIZATION_DATA_DIR;
+    // Follow global Low/High Res toggle
+    const channelBasePath = channelDataDir;
 
     const channelConfigs = topMarkers
       .map((marker, index) => {
@@ -304,7 +306,8 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
           justifyContent: 'space-between',
           backgroundColor: 'var(--header-bg, #333333)',
           padding: '8px 12px',
-          flexShrink: 0
+          flexShrink: 0,
+          borderBottom: '1px solid var(--border-color, #444)'
         }}
       >
         <h3

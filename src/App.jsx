@@ -7,6 +7,7 @@ import Local_View from './components/Local_View';
 import Graph_Pannel from './components/Graph_Pannel';
 import ROI from './components/ROI';
 import { useTheme } from './theme.jsx';
+import { useDataResolution } from './dataResolution.jsx';
 
 // Helper function to convert RGB to hex
 const rgbToHex = (r, g, b) => {
@@ -18,10 +19,12 @@ const rgbToHex = (r, g, b) => {
 
 function App() {
   const { colors } = useTheme();
+  const { channelDataDir } = useDataResolution();
   const [channels, setChannels] = useState([]);
   const [selectedRegions, setSelectedRegions] = useState([]);
   const [presetVersion, setPresetVersion] = useState(0);
   const lastAggregatedSignatureRef = useRef('');
+  const resolutionReadyRef = useRef(false);
 
   const [selectedRegionsData, setSelectedRegionsData] = useState([]);
   const [roiPositions, setRoiPositions] = useState([]);
@@ -231,7 +234,10 @@ function App() {
   );
 
   const aggregatedSignature = useMemo(
-    () => aggregatedRegionChannels.map((channel) => `${channel.regionId}-${channel.channelIndex}`).join('|'),
+    () =>
+      aggregatedRegionChannels
+        .map((channel) => `${channel.regionId}-${channel.channelIndex}-${channel.channelBasePath || ''}`)
+        .join('|'),
     [aggregatedRegionChannels]
   );
 
@@ -241,6 +247,27 @@ function App() {
     setChannels(aggregatedRegionChannels);
     setPresetVersion((prev) => prev + 1);
   }, [aggregatedSignature, aggregatedRegionChannels]);
+
+  // When Low/High Res toggles, retarget all channel paths and force reload
+  useEffect(() => {
+    if (!resolutionReadyRef.current) {
+      resolutionReadyRef.current = true;
+      return;
+    }
+    setChannels((prev) =>
+      prev.map((channel) => ({ ...channel, channelBasePath: channelDataDir }))
+    );
+    setSelectedRegions((prev) =>
+      prev.map((region) => ({
+        ...region,
+        channels: (region.channels || []).map((channel) => ({
+          ...channel,
+          channelBasePath: channelDataDir
+        }))
+      }))
+    );
+    setPresetVersion((prev) => prev + 1);
+  }, [channelDataDir]);
 
   return (
     <div style={{
@@ -256,9 +283,9 @@ function App() {
       left: 0,
       boxSizing: 'border-box'
     }}>
-      {/* Title - 9.5% height, 100% width */}
-      <div style={{ height: '4%', width: '100%', flexShrink: 0, overflow: 'hidden' }}>
-        <Title softwareName="Melanoma Tissue Volumes" />
+      {/* Title ribbon — compact height */}
+      <div style={{ width: '100%', flexShrink: 0, overflow: 'hidden' }}>
+        <Title softwareName="ConGAT: Context-aware graph attention network for 3D region of interest discovery in multiplexed microscopy images" />
       </div>
 
       {/* Main Content Area */}
@@ -273,7 +300,7 @@ function App() {
           minHeight: 0
         }}
       >
-        {/* Left Sidebar — Channel Selection + Region Selection (resizable width) */}
+        {/* Left Sidebar — Channel / Region Selection */}
         <div style={{
           width: `${leftWidthPct}%`,
           height: '100%',
@@ -285,11 +312,12 @@ function App() {
           minWidth: 0,
           minHeight: 0
         }}>
-          {/* Channel Selection - 45% of sidebar height */}
+          {/* Channel Selection — grows down until 60% then scrolls */}
           <div style={{
-            height: '45%',
             width: '100%',
-            overflow: 'hidden',
+            maxHeight: '60%',
+            overflowY: 'auto',
+            overflowX: 'hidden',
             boxSizing: 'border-box',
             flexShrink: 0,
             minHeight: 0
@@ -300,13 +328,12 @@ function App() {
               presetVersion={presetVersion}
             />
           </div>
-          {/* Region Selection - 55% of sidebar height */}
+          {/* Region Selection — sits directly under Channel Selection */}
           <div style={{
-            height: '55%',
+            flex: 1,
             width: '100%',
             overflow: 'hidden',
             boxSizing: 'border-box',
-            flexShrink: 0,
             minHeight: 0
           }}>
             <Region_Selection
