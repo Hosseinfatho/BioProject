@@ -126,6 +126,13 @@ const getConfigSignature = (config) =>
     config.channelIndex ?? ''
   ].join('|');
 
+/** Unique key per channel instance + resolution path (Low/High Res). */
+const getChannelCacheKey = (config) => {
+  if (!config) return '';
+  const id = config.id ?? config.channelIndex;
+  return `${id}@@${config.channelBasePath || ''}`;
+};
+
 // Position space in ROI JSON uses grid index × 16; same as 60_model.py coord_scale
 const ROI_POSITION_SCALE = 16;
 
@@ -899,7 +906,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     let referenceData = null;
 
     for (const channel of visibleChannels) {
-      const cacheKey = channel.id ?? channel.channelIndex;
+      const cacheKey = getChannelCacheKey(channel);
       let data = channelDataCacheRef.current.get(cacheKey);
 
       // If not in cache, try to fetch
@@ -1665,18 +1672,16 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     const loadedChannels = loadedChannelsRef.current;
     const channelDataCache = channelDataCacheRef.current;
 
-    // Map from (id ?? channelIndex) to config for lookup by loadedChannels key
+    // Map from cache key to config for lookup by loadedChannels key
     const channelConfigByKey = new Map();
     channels.forEach((cfg) => {
-      const k = cfg.id ?? cfg.channelIndex;
-      channelConfigByKey.set(k, cfg);
-      channelConfigByKey.set(cfg.channelIndex, cfg);
+      channelConfigByKey.set(getChannelCacheKey(cfg), cfg);
     });
 
     // First pass: Remove channels that are no longer in the list or are not visible
     let needsRender = false;
     loadedChannels.forEach((entry, key) => {
-      const channelConfig = channelConfigByKey.get(key) ?? channels.find((c) => (c.id ?? c.channelIndex) === key);
+      const channelConfig = channelConfigByKey.get(key);
 
       if (!channelConfig) {
         // Channel completely removed from list - dispose everything
@@ -1697,7 +1702,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
         if (mesh && scene.children.includes(mesh) && !isVisible) {
           scene.remove(mesh);
           needsRender = true;
-          console.log(`Main_View: ⚠️ Channel ${channelIndex} removed from scene (not visible)`);
+          console.log(`Main_View: ⚠️ Channel ${channelConfig.channelIndex} removed from scene (not visible)`);
         }
       }
     });
@@ -1711,7 +1716,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     // Second pass: Update channel configs and handle visibility changes
     channels.forEach((channelConfig) => {
       const channelIndex = channelConfig.channelIndex;
-      const key = channelConfig.id ?? channelIndex;
+      const key = getChannelCacheKey(channelConfig);
       channelConfigsRef.current.set(key, channelConfig);
       const entry = loadedChannels.get(key);
       const channelData = channelDataCache.get(key);
@@ -1750,7 +1755,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
 
     const loadChannels = async () => {
       const visibleChannels = channels.filter((cfg) => cfg.visible !== false);
-      const toLoad = visibleChannels.filter((cfg) => !loadedChannels.has(cfg.id ?? cfg.channelIndex));
+      const toLoad = visibleChannels.filter((cfg) => !loadedChannels.has(getChannelCacheKey(cfg)));
       if (toLoad.length === 0) {
         renderScene();
         return;
@@ -1762,7 +1767,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
         if (channelConfig.visible === false) continue;
 
         try {
-          const cacheKey = channelConfig.id ?? channelConfig.channelIndex;
+          const cacheKey = getChannelCacheKey(channelConfig);
           const currentConfig = channelConfigsRef.current.get(cacheKey);
           if (!currentConfig || getConfigSignature(currentConfig) !== getConfigSignature(channelConfig)) {
             console.log(`Main_View:  Skipping stale load for channel ${channelConfig.channelIndex}`);
@@ -1771,9 +1776,16 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
 
           let channelData = channelDataCache.get(cacheKey);
           if (!channelData) {
+            console.log(
+              `Main_View: Fetching channel ${channelConfig.channelIndex} from ${channelConfig.channelBasePath || 'default'}`
+            );
             channelData = await loadChannelData(channelConfig.channelIndex, { basePath: channelConfig.channelBasePath });
             if (channelData) {
               channelDataCache.set(cacheKey, channelData);
+            } else {
+              console.warn(
+                `Main_View: Failed to load channel ${channelConfig.channelIndex} (${channelConfig.channelBasePath || 'default'})`
+              );
             }
           }
 
@@ -1790,7 +1802,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
 
           if (result) {
             const { mesh, sampling } = result;
-            loadedChannels.set(channelConfig.id ?? channelConfig.channelIndex, {
+            loadedChannels.set(cacheKey, {
               mesh,
               sampling,
               lastRequestedSampling: desiredSampling,
@@ -1819,7 +1831,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
       }
 
       const visibleCount = visibleChannels.filter((cfg) => {
-        const entry = loadedChannels.get(cfg.id ?? cfg.channelIndex);
+        const entry = loadedChannels.get(getChannelCacheKey(cfg));
         return entry?.mesh && scene.children.includes(entry.mesh);
       }).length;
       console.log(`Main_View: Channel update complete. Visible ${visibleCount}/${visibleChannels.length}`);
@@ -1841,7 +1853,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
       if (visibleChannels.length === 0) return null;
 
       const firstChannel = visibleChannels[0];
-      const channelData = channelDataCacheRef.current.get(firstChannel.channelIndex);
+      const channelData = channelDataCacheRef.current.get(getChannelCacheKey(firstChannel));
       if (!channelData) return null;
 
       const { metadata } = channelData;
