@@ -2,16 +2,22 @@
 Export all channels from the public BiomedVis OME-Zarr (S3) into visualization_data/
 as channel_{i}_data.raw + channel_{i}_metadata.json for the React viewer.
 
-Examples:
-  # High-res default folder (component 4)
-  python export_channels_from_s3.py --component 4
+Pyramid (one channel, uint8):
+  component 5 → Low Res       ~11 MB    (194×172×340)      → visualization_data_low
+  component 3 → High Res     ~182 MB    (194×688×1363)     → visualization_data
+  component 1 → Very High   ~2.9 GB     (194×2754×5454)    → visualization_data_very_high
 
-  # Low-res for manually added channels
+Examples:
   python export_channels_from_s3.py --component 5 --output visualization_data_low
+  python export_channels_from_s3.py --component 3 --output visualization_data
+  python export_channels_from_s3.py --component 1 --output visualization_data_very_high
+  # Test a few channels first (~2.9 GB each):
+  python export_channels_from_s3.py --component 1 --output visualization_data_very_high --start-channel 0 --end-channel 2
 """
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 from pathlib import Path
 
@@ -23,12 +29,21 @@ DEFAULT_OUTPUT = Path(__file__).resolve().parent / "visualization_data"
 
 
 def normalize_to_uint8(data: np.ndarray) -> tuple[np.ndarray, int, int]:
+    """Scale to uint8 without allocating a full float64 copy (~22GB for Very High)."""
     data_min = int(np.min(data))
     data_max = int(np.max(data))
     if data_max == data_min:
         raise ValueError(f"constant value {data_min}")
-    scaled = ((data.astype(np.float64) - data_min) / (data_max - data_min) * 255).astype(np.uint8)
-    return scaled, data_min, data_max
+
+    span = data_max - data_min
+    out = np.empty(data.shape, dtype=np.uint8)
+
+    # Slice along Z so peak extra RAM is one plane (~30MB), not a full float volume.
+    for z in range(data.shape[0]):
+        slab = data[z].astype(np.uint32, copy=False)
+        out[z] = ((slab - data_min) * 255) // span
+
+    return out, data_min, data_max
 
 
 def export_channels(
@@ -38,6 +53,7 @@ def export_channels(
     end_channel: int,
     downsample: int,
     skip_existing: bool = True,
+    channels: list[int] | None = None,
 ) -> tuple[list[int], list[tuple[int, str]]]:
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -49,28 +65,37 @@ def export_channels(
         raise ValueError(f"Expected 5D (t,c,z,y,x), got {arr.ndim}D")
 
     n_channels = int(arr.shape[1])
-    end_channel = min(end_channel, n_channels - 1)
+    if channels is not None:
+        channel_list = sorted({int(c) for c in channels if 0 <= int(c) < n_channels})
+    else:
+        end_channel = min(end_channel, n_channels - 1)
+        channel_list = list(range(start_channel, end_channel + 1))
+
+    if not channel_list:
+        raise ValueError("No valid channel indices to export")
 
     successful: list[int] = []
     failed: list[tuple[int, str]] = []
     skipped: list[int] = []
 
-    for channel_idx in range(start_channel, end_channel + 1):
+    for i, channel_idx in enumerate(channel_list):
         raw_path = output_dir / f"channel_{channel_idx}_data.raw"
         meta_path = output_dir / f"channel_{channel_idx}_metadata.json"
         meta_alias = output_dir / f"channel_{channel_idx}_data.json"
 
         if skip_existing and raw_path.exists() and meta_path.exists() and raw_path.stat().st_size > 0:
-            print(f"[{channel_idx}/{end_channel}] skip existing {raw_path.name}", flush=True)
+            print(f"[{i+1}/{len(channel_list)}] skip existing {raw_path.name}", flush=True)
             skipped.append(channel_idx)
             successful.append(channel_idx)
             continue
 
-        print(f"\n[{channel_idx}/{end_channel}] Channel {channel_idx}...", flush=True)
+        print(f"\n[{i+1}/{len(channel_list)}] Channel {channel_idx}...", flush=True)
         try:
             vol = arr[0, channel_idx, ::downsample, ::downsample, ::downsample].compute()
             print(f"  shape={vol.shape}", flush=True)
             data_u8, data_min, data_max = normalize_to_uint8(vol)
+            del vol
+            gc.collect()
 
             metadata = {
                 "shape": list(data_u8.shape),
@@ -81,12 +106,15 @@ def export_channels(
             }
 
             data_u8.tofile(raw_path)
+            del data_u8
+            gc.collect()
             text = json.dumps(metadata, indent=2)
             meta_path.write_text(text, encoding="utf-8")
             meta_alias.write_text(text, encoding="utf-8")
 
             print(
-                f"  wrote {raw_path.name} ({data_u8.nbytes / 1024**2:.1f} MB), "
+                f"  wrote {raw_path.name} "
+                f"({raw_path.stat().st_size / 1024**2:.1f} MB), "
                 f"range [{data_min}, {data_max}]",
                 flush=True,
             )
@@ -94,6 +122,7 @@ def export_channels(
         except Exception as exc:  # noqa: BLE001
             print(f"  FAILED: {exc}", flush=True)
             failed.append((channel_idx, str(exc)))
+            gc.collect()
 
     print(
         f"\nDone. ok={len(successful)} skipped={len(skipped)} failed={len(failed)} -> {output_dir}",
@@ -104,10 +133,21 @@ def export_channels(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--component", default="4", help="Pyramid level (0=full, 4=high, 5=low)")
+    parser.add_argument(
+        "--component",
+        default="3",
+        help="Pyramid level: 5=low, 3=high, 1=very-high (~16x high / ~2.9GB per channel)",
+    )
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--start-channel", type=int, default=0)
     parser.add_argument("--end-channel", type=int, default=69)
+    parser.add_argument(
+        "--channels",
+        nargs="+",
+        type=int,
+        default=None,
+        help="Specific channel indices (overrides --start-channel/--end-channel)",
+    )
     parser.add_argument("--downsample", type=int, default=1)
     parser.add_argument(
         "--clean",
@@ -137,6 +177,7 @@ def main() -> int:
         end_channel=args.end_channel,
         downsample=args.downsample,
         skip_existing=not args.force,
+        channels=args.channels,
     )
     return 0 if not failed else 1
 

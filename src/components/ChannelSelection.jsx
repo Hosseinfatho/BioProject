@@ -19,7 +19,7 @@ const rgbToHex = (r, g, b) => {
 };
 
 const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion = 0 }) => {
-  const { channelDataDir, isLowRes, toggleResolution } = useDataResolution();
+  const { channelDataDir, resolution, setResolution } = useDataResolution();
   const [channels, setChannels] = useState([]);
   const presetVersionRef = useRef(null);
   const presetChannelsRef = useRef(presetChannels);
@@ -271,20 +271,23 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
     const maxId = numericIds.length > 0 ? Math.max(...numericIds) : -1;
     const newId = maxId + 1;
 
-    // Follow Low/High Res toggle (default Low Res = visualization_data_low)
+    // Follow Low / High / Very High Res toggle (default Low)
     const channelBasePath = channelDataDir;
     let dataRange = [0, 65535];
     const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
-    const otherDir = isLowRes
-      ? (CONFIG.VISUALIZATION_DATA_DIR || 'visualization_data')
-      : (CONFIG.LOW_RES_CHANNEL_DIR || 'visualization_data_low');
+    const fallbackDirs = [
+      CONFIG.LOW_RES_CHANNEL_DIR || 'visualization_data_low',
+      CONFIG.VISUALIZATION_DATA_DIR || 'visualization_data',
+      CONFIG.VERY_HIGH_RES_CHANNEL_DIR || 'visualization_data_very_high'
+    ].filter((dir) => dir && dir !== channelBasePath);
     const paths = [
       `${baseUrl}/${channelBasePath}/channel_0_napari_metadata.json`,
       `${baseUrl}/${channelBasePath}/channel_0_data.json`,
       `${baseUrl}/${channelBasePath}/channel_0_metadata.json`,
-      // Fallback to the other resolution if selected data is missing
-      `${baseUrl}/${otherDir}/channel_0_napari_metadata.json`,
-      `${baseUrl}/${otherDir}/channel_0_metadata.json`
+      ...fallbackDirs.flatMap((dir) => [
+        `${baseUrl}/${dir}/channel_0_napari_metadata.json`,
+        `${baseUrl}/${dir}/channel_0_metadata.json`
+      ])
     ];
 
     for (const path of paths) {
@@ -550,80 +553,54 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
           </button>
         </h3>
 
-        {/* Low Res / High Res toggle — right side of Channel Selection header */}
-        <button
-          type="button"
-          role="switch"
-          aria-checked={!isLowRes}
-          onClick={toggleResolution}
-          title={isLowRes ? 'Switch to High Res volumes' : 'Switch to Low Res volumes'}
-          aria-label="Toggle low and high resolution data"
+        {/* Low / High / Very High Res segmented toggle */}
+        <div
+          role="group"
+          aria-label="Channel data resolution"
+          title="Low ≈11MB · High ≈182MB · Very High ≈2.9GB per channel"
           style={{
             display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: 0,
-            border: 'none',
-            background: 'transparent',
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-            color: 'var(--text-color, #ffffff)',
-            flexShrink: 0
+            alignItems: 'stretch',
+            borderRadius: '8px',
+            border: '1px solid var(--border-strong, #666)',
+            overflow: 'hidden',
+            flexShrink: 0,
+            background: 'rgba(0,0,0,0.25)'
           }}
         >
-          <span
-            style={{
-              fontSize: '10px',
-              fontWeight: 700,
-              letterSpacing: '0.03em',
-              color: isLowRes ? 'var(--text-color, #fff)' : 'var(--text-muted, #888)',
-              opacity: isLowRes ? 1 : 0.55,
-              whiteSpace: 'nowrap'
-            }}
-          >
-            Low Res
-          </span>
-          <span
-            style={{
-              position: 'relative',
-              width: '40px',
-              height: '20px',
-              borderRadius: '999px',
-              backgroundColor: isLowRes ? '#3a3a3a' : '#2e7d32',
-              border: '1px solid var(--border-strong, #666)',
-              boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.25)',
-              flexShrink: 0,
-              transition: 'background-color 0.25s'
-            }}
-          >
-            <span
-              style={{
-                position: 'absolute',
-                top: '1px',
-                left: isLowRes ? '1px' : '19px',
-                width: '16px',
-                height: '16px',
-                borderRadius: '50%',
-                backgroundColor: isLowRes ? '#ffffff' : '#c8e6c9',
-                border: `1px solid ${isLowRes ? '#bbb' : '#81c784'}`,
-                boxShadow: '0 1px 3px rgba(0,0,0,0.35)',
-                transition: 'left 0.22s ease, background-color 0.22s'
-              }}
-            />
-          </span>
-          <span
-            style={{
-              fontSize: '10px',
-              fontWeight: 700,
-              letterSpacing: '0.03em',
-              color: isLowRes ? 'var(--text-muted, #888)' : 'var(--text-color, #fff)',
-              opacity: isLowRes ? 0.55 : 1,
-              whiteSpace: 'nowrap'
-            }}
-          >
-            High Res
-          </span>
-        </button>
+          {[
+            { id: 'low', label: 'Low' },
+            { id: 'high', label: 'High' },
+            { id: 'very', label: 'Very High' }
+          ].map((opt, index) => {
+            const active = resolution === opt.id;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setResolution(opt.id)}
+                style={{
+                  margin: 0,
+                  border: 'none',
+                  borderLeft: index === 0 ? 'none' : '1px solid var(--border-strong, #555)',
+                  padding: '3px 8px',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  letterSpacing: '0.02em',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  whiteSpace: 'nowrap',
+                  color: active ? '#0b1a0b' : 'var(--text-muted, #aaa)',
+                  background: active ? '#81c784' : 'transparent',
+                  transition: 'background-color 0.15s, color 0.15s'
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Help Panel - Black & Green Theme */}

@@ -15,6 +15,8 @@ build/
 visualization_data/
 visualization_data_low/
 visualization_data_lo/
+visualization_data_very_high/
+very_high_export.log
 # IDE
 .vscode/
 .idea/

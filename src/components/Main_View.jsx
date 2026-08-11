@@ -25,9 +25,9 @@ const FAST_MOVE_SPEED = 0.15;
 const LOD_COOLDOWN_MS = 200;
 /**
  * Max rendered voxels per channel (after threshold).
- * 50M: online-friendly — High Res (~182M voxels) will auto-raise sampling.
+ * 200M: allows Very High (stride 2×2 → ~728M volume) to keep denser sampling.
  */
-const MAX_POINTS_PER_CHANNEL = 50000000;
+const MAX_POINTS_PER_CHANNEL = 200000000;
 const OPACITY_FLOOR = 0.35;
 const OPACITY_BOOST = 1.3;
 const EDGE_FEATHER = 0.99;
@@ -124,6 +124,10 @@ const getConfigSignature = (config) =>
     config.channelBasePath ?? '',
     config.channelIndex ?? ''
   ].join('|');
+
+/** Identity of the volume payload (ignore thresholds so slow Very High loads aren't discarded). */
+const getDataIdentity = (config) =>
+  `${config.id ?? config.channelIndex}|${config.channelIndex}|${config.channelBasePath ?? ''}`;
 
 /** Unique key per channel instance + resolution path (Low/High Res). */
 const getChannelCacheKey = (config) => {
@@ -1768,7 +1772,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
         try {
           const cacheKey = getChannelCacheKey(channelConfig);
           const currentConfig = channelConfigsRef.current.get(cacheKey);
-          if (!currentConfig || getConfigSignature(currentConfig) !== getConfigSignature(channelConfig)) {
+          if (!currentConfig || getDataIdentity(currentConfig) !== getDataIdentity(channelConfig)) {
             console.log(`Main_View:  Skipping stale load for channel ${channelConfig.channelIndex}`);
             continue;
           }
@@ -1789,15 +1793,17 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
           }
 
           const latestConfig = channelConfigsRef.current.get(cacheKey);
-          if (!latestConfig || getConfigSignature(latestConfig) !== getConfigSignature(channelConfig)) {
+          if (!latestConfig || getDataIdentity(latestConfig) !== getDataIdentity(channelConfig)) {
             console.log(`Main_View:  Loaded data discarded for channel ${channelConfig.channelIndex} (stale)`);
             continue;
           }
 
+          // Prefer latest thresholds/color if they changed during the long fetch
+          const renderConfig = latestConfig || channelConfig;
           if (!channelData) continue;
 
           const desiredSampling = getDesiredSampling(cameraStateRef.current?.distance || 3);
-          const result = createChannelVisualization(channelData, channelConfig, desiredSampling);
+          const result = createChannelVisualization(channelData, renderConfig, desiredSampling);
 
           if (result) {
             const { mesh, sampling } = result;
@@ -1805,17 +1811,17 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
               mesh,
               sampling,
               lastRequestedSampling: desiredSampling,
-              configSignature: getConfigSignature(channelConfig)
+              configSignature: getConfigSignature(renderConfig)
             });
             lodStateRef.current.lastSampling = sampling;
             pointCloudsRef.current.push(mesh);
 
-            if (channelConfig.visible !== false) {
+            if (renderConfig.visible !== false) {
               scene.add(mesh);
               mesh.renderOrder = 1;
-              console.log(`Main_View:  Channel ${channelConfig.channelIndex} added (sampling=${sampling})`);
+              console.log(`Main_View:  Channel ${renderConfig.channelIndex} added (sampling=${sampling})`);
             } else {
-              console.log(`Main_View:  Channel ${channelConfig.channelIndex} prepared but not visible`);
+              console.log(`Main_View:  Channel ${renderConfig.channelIndex} prepared but not visible`);
             }
 
             renderScene();

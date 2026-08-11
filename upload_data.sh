@@ -4,6 +4,7 @@
 #
 #   bash upload_data.sh visualization_data
 #   bash upload_data.sh visualization_data_low
+#   bash upload_data.sh visualization_data_very_high
 #   bash upload_data.sh all
 
 set -euo pipefail
@@ -62,6 +63,10 @@ if [[ "$LOCAL_DIR" == "all" ]]; then
   upload_dir visualization_data
   echo
   upload_dir visualization_data_low
+  echo
+  if [[ -d visualization_data_very_high ]]; then
+    upload_dir visualization_data_very_high
+  fi
 else
   upload_dir "$LOCAL_DIR"
 fi

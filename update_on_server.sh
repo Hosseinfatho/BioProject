@@ -13,7 +13,7 @@ echo "==> git pull"
 git pull --ff-only
 
 echo "==> ensure data dirs exist (volumes)"
-mkdir -p visualization_data visualization_data_low VIS2026/output VIS2026/Hi_res/HI_res_channel
+mkdir -p visualization_data visualization_data_low visualization_data_very_high VIS2026/output VIS2026/Hi_res/HI_res_channel
 # One-time rename from old folder name (previous deploys used visualization_data_lo)
 if [ -d visualization_data_lo ] && [ ! -e visualization_data_low ]; then
   echo "==> renaming visualization_data_lo -> visualization_data_low"
