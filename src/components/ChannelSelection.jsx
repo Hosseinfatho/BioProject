@@ -487,14 +487,15 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
     <div style={{
       height: '100%',
       width: '100%',
-      backgroundColor: '#000000',
-      border: '1px solid #444',
+      backgroundColor: 'var(--panel-bg, #000000)',
+      border: '1px solid var(--border-color, #444)',
       padding: '1px',
       display: 'flex',
       flexDirection: 'column',
       fontSize: '10px',
       boxSizing: 'border-box',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      color: 'var(--text-color, #ffffff)'
     }}>
       {/* Header */}
       <div style={{
@@ -503,10 +504,10 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
         justifyContent: 'space-between',
         marginBottom: '12px',
         padding: '8px 12px',
-        backgroundColor: '#333333',
-        borderBottom: '1px solid #444'
+        backgroundColor: 'var(--header-bg, #333333)',
+        borderBottom: '1px solid var(--border-color, #444)'
       }}>
-        <h3 style={{ margin: 0, fontSize: '16px', color: 'white', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <h3 style={{ margin: 0, fontSize: '16px', color: 'var(--text-color, white)', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '8px' }}>
           Channel Selection
           {/* Help Button */}
           <button

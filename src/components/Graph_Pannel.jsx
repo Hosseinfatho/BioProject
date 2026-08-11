@@ -1286,13 +1286,14 @@ const Graph_Pannel = ({ selectedRegionData, selectedRegionsData, channels = [], 
       style={{
         height: '100%',
         width: '100%',
-        backgroundColor: '#000000',
-        border: '1px solid #444',
+        backgroundColor: 'var(--panel-bg, #000000)',
+        border: '1px solid var(--border-color, #444)',
         padding: '1px',
         display: 'flex',
         flexDirection: 'column',
         position: 'relative',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        color: 'var(--text-color, #ffffff)'
       }}
     >
       {/* Header with title and toggle - Flexbox layout */}
@@ -1301,15 +1302,15 @@ const Graph_Pannel = ({ selectedRegionData, selectedRegionsData, channels = [], 
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: '8px 12px',
-        backgroundColor: '#333333',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+        backgroundColor: 'var(--header-bg, #333333)',
+        borderBottom: '1px solid var(--border-color, rgba(255, 255, 255, 0.1))',
         flexShrink: 0,
         zIndex: 10
       }}>
         <h3 style={{
           margin: 0,
           fontSize: '14px',
-          color: 'white',
+          color: 'var(--text-color, white)',
           fontWeight: '500'
         }}>
           Graph Panel

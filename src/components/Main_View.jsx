@@ -6,12 +6,19 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass';
 import { loadChannelData } from '../hooks/useChannelData';
+import { useTheme } from '../theme.jsx';
 
 const CAMERA_INITIAL_STATE = {
   rotation: { x: 0, y: Math.PI },
   distance: 0.75,
   panOffset: { x: 0, y: 0, z: 0 }
 };
+
+const cloneCameraState = (state = CAMERA_INITIAL_STATE) => ({
+  rotation: { x: state.rotation.x, y: state.rotation.y },
+  distance: state.distance,
+  panOffset: { x: state.panOffset.x, y: state.panOffset.y, z: state.panOffset.z }
+});
 
 const MOVE_SPEED = 0.05;
 const FAST_MOVE_SPEED = 0.15;
@@ -24,6 +31,33 @@ const JITTER_SCALE = 0.1;
 const AMBIENT_COLOR = new THREE.Color(0.9, 0.9, 0.95);
 const DEFAULT_THRESHOLD_MIN_FRACTION = 0.03;
 const DEFAULT_THRESHOLD_MAX_FRACTION = 0.9;
+
+// Shared voxel fragment shader (day mode boosts saturation for contrast on white)
+const VOXEL_FRAGMENT_SHADER = `
+  uniform vec3 color;
+  uniform float edgeFeather;
+  uniform float lightMode;
+  varying float vOpacity;
+  varying vec3 vLocalPos;
+  void main() {
+    float base = clamp(vOpacity, 0.0, 1.0);
+    float edge = max(max(abs(vLocalPos.x), abs(vLocalPos.y)), abs(vLocalPos.z));
+    float edgeFade = smoothstep(0.5 - edgeFeather, 0.5, edge);
+    base *= (1.0 - edgeFade);
+    if (base <= 0.01) discard;
+    vec3 finalColor = pow(color, vec3(0.55));
+    float luma = dot(finalColor, vec3(0.299, 0.587, 0.114));
+    if (lightMode > 0.5) {
+      vec3 saturated = clamp(luma + (finalColor - luma) * 2.1, 0.0, 1.0);
+      vec3 dayColor = pow(saturated, vec3(1.15));
+      float a = clamp(max(base * 1.15, 0.55), 0.55, 1.0);
+      gl_FragColor = vec4(dayColor, a);
+    } else {
+      vec3 saturated = clamp(luma + (finalColor - luma) * 1.75, 0.0, 1.0);
+      gl_FragColor = vec4(saturated * base, base);
+    }
+  }
+`;
 
 // Color map for selection boxes
 const BOX_COLOR_MAP = [
@@ -88,6 +122,7 @@ const getConfigSignature = (config) =>
 const ROI_POSITION_SCALE = 16;
 
 const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initialSelectionBounds, selectedRegionsData = [], roiBoxes = null, onRoiHover = null }) => {
+  const { colors, theme } = useTheme();
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
@@ -137,7 +172,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     selectionEndRef.current = selectionEnd;
   }, [selectionEnd]);
 
-  const cameraStateRef = useRef({ ...CAMERA_INITIAL_STATE });
+  const cameraStateRef = useRef(cloneCameraState());
 
   // Keep denser voxels when zoomed; only thin out when far away
   const getDesiredSampling = useCallback((distance = 3) => {
@@ -257,10 +292,13 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     geometry.setAttribute('instanceOffset', new THREE.InstancedBufferAttribute(new Float32Array(points), 3));
     geometry.setAttribute('instanceOpacity', new THREE.InstancedBufferAttribute(new Float32Array(opacities), 1));
 
+    // Additive blending disappears on white backgrounds — use normal blending in day mode
+    const useAdditive = theme !== 'light';
     const voxelMaterial = new THREE.ShaderMaterial({
       uniforms: {
         color: { value: new THREE.Color(r, g, b) },
-        edgeFeather: { value: EDGE_FEATHER }
+        edgeFeather: { value: EDGE_FEATHER },
+        lightMode: { value: useAdditive ? 0.0 : 1.0 }
       },
       vertexShader: `
         attribute vec3 instanceOffset;
@@ -275,33 +313,19 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
           gl_Position = projectionMatrix * mvPosition;
         }
       `,
-      fragmentShader: `
-        uniform vec3 color;
-        uniform float edgeFeather;
-        varying float vOpacity;
-        varying vec3 vLocalPos;
-        void main() {
-          float base = clamp(vOpacity, 0.0, 1.0);
-          float edge = max(max(abs(vLocalPos.x), abs(vLocalPos.y)), abs(vLocalPos.z));
-          float edgeFade = smoothstep(0.5 - edgeFeather, 0.5, edge);
-          base *= (1.0 - edgeFade);
-          if (base <= 0.01) discard;
-          vec3 finalColor = pow(color, vec3(0.55));
-          gl_FragColor = vec4(finalColor * base, base);
-        }
-      `,
+      fragmentShader: VOXEL_FRAGMENT_SHADER,
       transparent: true,
-      depthWrite: false,
-      depthTest: false,
-      blending: THREE.AdditiveBlending
+      depthWrite: !useAdditive,
+      depthTest: !useAdditive,
+      blending: useAdditive ? THREE.AdditiveBlending : THREE.NormalBlending
     });
 
     const mesh = new THREE.Mesh(geometry, voxelMaterial);
     mesh.frustumCulled = false;
-    mesh.userData = { channelIndex: channelConfig.channelIndex, sampling };
+    mesh.userData = { channelIndex: channelConfig.channelIndex, sampling, theme };
 
     return { mesh, sampling };
-  }, []);
+  }, [theme]);
 
   const renderScene = useCallback(() => {
     const scene = sceneRef.current;
@@ -392,17 +416,14 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     renderScene();
   }, [createChannelVisualization, getDesiredSampling, renderScene]);
 
-  // Reset camera to initial state and clear all boxes
+  // Reset camera to initial state (same as first load) and clear all boxes
   const resetCameraView = useCallback(() => {
-    // Reset camera to initial state
-    cameraStateRef.current = { ...CAMERA_INITIAL_STATE };
-    
+    // Deep-clone so mutated rotation/panOffset never corrupt CAMERA_INITIAL_STATE
+    cameraStateRef.current = cloneCameraState();
+
     if (cameraRef.current) {
-      // Update camera position to show default view
       updateCameraPosition();
-      
-      // Force LOD update to show data at appropriate quality for default view
-      lodStateRef.current.lastUpdate = 0; // Reset LOD cooldown to force update
+      lodStateRef.current.lastUpdate = 0;
       updateChannelLOD();
     }
     
@@ -1118,6 +1139,42 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
     }
   }, [selectedRegionsData, renderScene]);
 
+  // Keep WebGL clear color in sync with Day/Night theme and update voxel blending
+  // (additive blending is invisible on white; day mode needs NormalBlending)
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    const scene = sceneRef.current;
+    if (!renderer) return;
+
+    const clearHex = (colors.canvasBg || '#000000').replace('#', '');
+    const clearColor = parseInt(clearHex, 16);
+    renderer.setClearColor(clearColor);
+    if (scene) {
+      scene.background = new THREE.Color(clearColor);
+    }
+
+    const useAdditive = theme !== 'light';
+    const updateMeshMaterial = (mesh) => {
+      if (!mesh?.material) return;
+      mesh.material.blending = useAdditive ? THREE.AdditiveBlending : THREE.NormalBlending;
+      mesh.material.depthWrite = !useAdditive;
+      mesh.material.depthTest = !useAdditive;
+      mesh.material.fragmentShader = VOXEL_FRAGMENT_SHADER;
+      if (mesh.material.uniforms?.lightMode) {
+        mesh.material.uniforms.lightMode.value = useAdditive ? 0.0 : 1.0;
+      }
+      mesh.material.needsUpdate = true;
+      if (mesh.userData) mesh.userData.theme = theme;
+    };
+
+    pointCloudsRef.current.forEach(updateMeshMaterial);
+    loadedChannelsRef.current.forEach((entry) => {
+      if (entry?.mesh) updateMeshMaterial(entry.mesh);
+    });
+
+    renderScene();
+  }, [theme, colors.canvasBg, renderScene]);
+
   // Setup Three.js scene
   useEffect(() => {
     if (!mountRef.current) return;
@@ -1139,7 +1196,10 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
       powerPreference: 'high-performance'
     });
     renderer.setSize(width, height);
-    renderer.setClearColor(0x000000);
+    const clearHex = (colors.canvasBg || '#000000').replace('#', '');
+    const clearColor = parseInt(clearHex, 16);
+    renderer.setClearColor(clearColor);
+    scene.background = new THREE.Color(clearColor);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     if (renderer.outputColorSpace !== undefined) {
       renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -1840,7 +1900,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
       height: '100%',
       width: '100%',
       position: 'relative',
-      backgroundColor: '#000000',
+      backgroundColor: colors.canvasBg,
       overflow: 'hidden',
       boxSizing: 'border-box'
     }}>
@@ -1993,21 +2053,22 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
           top: '60px',
           right: '10px',
           zIndex: 1000,
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          color: 'white',
+          backgroundColor: 'var(--legend-bg, rgba(0, 0, 0, 0.8))',
+          color: 'var(--text-color, white)',
           padding: '10px',
           borderRadius: '4px',
           fontSize: '12px',
           fontFamily: 'monospace',
-          minWidth: '200px'
+          minWidth: '200px',
+          border: '1px solid var(--border-color, #555)'
         }}>
-          <div style={{ fontWeight: 'bold', marginBottom: '5px', borderBottom: '1px solid #555', paddingBottom: '5px' }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '5px', borderBottom: '1px solid var(--border-color, #555)', paddingBottom: '5px' }}>
             3D Cuboid Selection
           </div>
           <div>Width: {cuboidDimensions.width} μm</div>
           <div>Height: {cuboidDimensions.height} μm</div>
           <div>Depth: {cuboidDimensions.depth} μm</div>
-          <div style={{ marginTop: '5px', borderTop: '1px solid #555', paddingTop: '5px' }}>
+          <div style={{ marginTop: '5px', borderTop: '1px solid var(--border-color, #555)', paddingTop: '5px' }}>
             Volume: {cuboidDimensions.volume} μm³
           </div>
           {isSelecting && (

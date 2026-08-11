@@ -1,16 +1,44 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import * as THREE from 'three';
 import { loadChannelData } from '../hooks/useChannelData';
+import { useTheme } from '../theme.jsx';
 
 const OPACITY_FLOOR = 0.35;
 const OPACITY_BOOST = 1.3;
 const EDGE_FEATHER = 0.99;
 const JITTER_SCALE = 0.1;
 
+const VOXEL_FRAGMENT_SHADER = `
+  uniform vec3 color;
+  uniform float edgeFeather;
+  uniform float lightMode;
+  varying float vOpacity;
+  varying vec3 vLocalPos;
+  void main() {
+    float base = clamp(vOpacity, 0.0, 1.0);
+    float edge = max(max(abs(vLocalPos.x), abs(vLocalPos.y)), abs(vLocalPos.z));
+    float edgeFade = smoothstep(0.5 - edgeFeather, 0.5, edge);
+    base *= (1.0 - edgeFade);
+    if (base <= 0.01) discard;
+    vec3 finalColor = pow(color, vec3(0.55));
+    float luma = dot(finalColor, vec3(0.299, 0.587, 0.114));
+    if (lightMode > 0.5) {
+      vec3 saturated = clamp(luma + (finalColor - luma) * 2.1, 0.0, 1.0);
+      vec3 dayColor = pow(saturated, vec3(1.15));
+      float a = clamp(max(base * 1.15, 0.55), 0.55, 1.0);
+      gl_FragColor = vec4(dayColor, a);
+    } else {
+      vec3 saturated = clamp(luma + (finalColor - luma) * 1.75, 0.0, 1.0);
+      gl_FragColor = vec4(saturated * base, base);
+    }
+  }
+`;
+
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
 // Component for rendering a single local view
 const LocalViewContent = ({ selectedRegionData, channels = [], onCloseTab, regionId }) => {
+  const { theme, colors } = useTheme();
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
@@ -208,10 +236,12 @@ const LocalViewContent = ({ selectedRegionData, channels = [], onCloseTab, regio
       new THREE.InstancedBufferAttribute(new Float32Array(opacities), 1)
     );
 
+    const useAdditive = theme !== 'light';
     const voxelMaterial = new THREE.ShaderMaterial({
       uniforms: {
         color: { value: new THREE.Color(r, g, b) },
-        edgeFeather: { value: EDGE_FEATHER }
+        edgeFeather: { value: EDGE_FEATHER },
+        lightMode: { value: useAdditive ? 0.0 : 1.0 }
       },
       vertexShader: `
         attribute vec3 instanceOffset;
@@ -226,29 +256,11 @@ const LocalViewContent = ({ selectedRegionData, channels = [], onCloseTab, regio
           gl_Position = projectionMatrix * mvPosition;
         }
       `,
-      fragmentShader: `
-        uniform vec3 color;
-        uniform float edgeFeather;
-        varying float vOpacity;
-        varying vec3 vLocalPos;
-        void main() {
-          float base = clamp(vOpacity, 0.0, 1.0);
-          float edge = max(max(abs(vLocalPos.x), abs(vLocalPos.y)), abs(vLocalPos.z));
-          float edgeFade = smoothstep(0.5 - edgeFeather, 0.5, edge);
-          base *= (1.0 - edgeFade);
-          if (base <= 0.01) discard;
-          
-          // Match Main_View color processing
-          vec3 finalColor = pow(color, vec3(0.55));
-          
-          // Additive blending expects pre-multiplied alpha
-          gl_FragColor = vec4(finalColor * base, base);
-        }
-      `,
+      fragmentShader: VOXEL_FRAGMENT_SHADER,
       transparent: true,
-      depthWrite: false, // Disable depth write for additive blending
-      depthTest: false,  // Disable depth test to see through volume
-      blending: THREE.AdditiveBlending
+      depthWrite: !useAdditive,
+      depthTest: !useAdditive,
+      blending: useAdditive ? THREE.AdditiveBlending : THREE.NormalBlending
     });
 
     const mesh = new THREE.Mesh(geometry, voxelMaterial);
@@ -629,7 +641,10 @@ const LocalViewContent = ({ selectedRegionData, channels = [], onCloseTab, regio
       powerPreference: "high-performance"
     });
     renderer.setSize(width, height);
-    renderer.setClearColor(0x000000);
+    const clearHex = (colors.canvasBg || '#000000').replace('#', '');
+    const clearColor = parseInt(clearHex, 16);
+    renderer.setClearColor(clearColor);
+    scene.background = new THREE.Color(clearColor);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     if (renderer.outputEncoding !== undefined) {
       renderer.outputEncoding = THREE.sRGBEncoding;
@@ -866,6 +881,36 @@ const LocalViewContent = ({ selectedRegionData, channels = [], onCloseTab, regio
     };
   }, [selectedRegionData, channels]); // Watch both - this ensures updates when either changes
 
+  // Keep WebGL clear color in sync with Day/Night theme and update voxel blending
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    const scene = sceneRef.current;
+    if (!renderer) return;
+    const clearHex = (colors.canvasBg || '#000000').replace('#', '');
+    const clearColor = parseInt(clearHex, 16);
+    renderer.setClearColor(clearColor);
+    if (scene) {
+      scene.background = new THREE.Color(clearColor);
+    }
+
+    const useAdditive = theme !== 'light';
+    voxelMeshesRef.current.forEach((mesh) => {
+      if (!mesh?.material) return;
+      mesh.material.blending = useAdditive ? THREE.AdditiveBlending : THREE.NormalBlending;
+      mesh.material.depthWrite = !useAdditive;
+      mesh.material.depthTest = !useAdditive;
+      mesh.material.fragmentShader = VOXEL_FRAGMENT_SHADER;
+      if (mesh.material.uniforms?.lightMode) {
+        mesh.material.uniforms.lightMode.value = useAdditive ? 0.0 : 1.0;
+      }
+      mesh.material.needsUpdate = true;
+    });
+
+    if (scene && cameraRef.current) {
+      renderer.render(scene, cameraRef.current);
+    }
+  }, [theme, colors.canvasBg]);
+
   // Close info modal when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -943,26 +988,27 @@ const LocalViewContent = ({ selectedRegionData, channels = [], onCloseTab, regio
     <div style={{
       height: '100%',
       width: '100%',
-      backgroundColor: '#000000',
-      border: '1px solid #444',
+      backgroundColor: 'var(--panel-bg, #000000)',
+      border: '1px solid var(--border-color, #444)',
       padding: '1px',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
       overflow: 'hidden',
-      position: 'relative'
+      position: 'relative',
+      color: 'var(--text-color, #ffffff)'
     }}>
       <h3 style={{
         marginTop: 0,
         marginBottom: '5px',
         fontSize: '14px',
-        color: 'white',
+        color: 'var(--text-color, white)',
         position: 'absolute',
         top: '5px',
         left: '10px',
         zIndex: 100,
-        backgroundColor: '#333333',
+        backgroundColor: 'var(--header-bg, #333333)',
         padding: '8px 12px',
         display: 'flex',
         alignItems: 'center',
@@ -1250,14 +1296,14 @@ const Local_View = ({ selectedRegionsData, selectedRegionData, channels = [], on
     }
   };
 
-  // If no selections, show placeholder
+  // If no selections, show placeholder (follows Day/Night canvas background)
   if (visibleRegions.length === 0) {
     return (
       <div style={{
         height: '100%',
         width: '100%',
-        backgroundColor: '#000000',
-        border: '1px solid #444',
+        backgroundColor: 'var(--canvas-bg, var(--panel-bg, #000000))',
+        border: '1px solid var(--border-color, #444)',
         padding: '1px',
         display: 'flex',
         flexDirection: 'column',
@@ -1271,7 +1317,7 @@ const Local_View = ({ selectedRegionsData, selectedRegionData, channels = [], on
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          color: '#666',
+          color: 'var(--text-muted, #666)',
           fontSize: '12px',
           textAlign: 'center',
           zIndex: 50,
@@ -1303,17 +1349,18 @@ const Local_View = ({ selectedRegionsData, selectedRegionData, channels = [], on
     <div style={{
       height: '100%',
       width: '100%',
-      backgroundColor: '#000000',
-      border: '1px solid #444',
+      backgroundColor: 'var(--panel-bg, #000000)',
+      border: '1px solid var(--border-color, #444)',
       display: 'flex',
       flexDirection: 'column',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      color: 'var(--text-color, #ffffff)'
     }}>
       {/* Tabs Header */}
       <div style={{
         display: 'flex',
-        backgroundColor: '#333333',
-        borderBottom: '1px solid #444',
+        backgroundColor: 'var(--header-bg, #333333)',
+        borderBottom: '1px solid var(--border-color, #444)',
         padding: '0',
         overflowX: 'auto',
         overflowY: 'hidden',

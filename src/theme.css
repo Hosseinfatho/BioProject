@@ -1,0 +1,25 @@
+/* Theme tokens are set on :root via ThemeProvider (see theme.jsx).
+   Inline styles should prefer var(--*) so Day/Night toggle updates the whole UI. */
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background-color: var(--app-bg, #000000);
+  color: var(--text-color, #ffffff);
+}
+
+/* Form controls inherit readable colors in both themes */
+input,
+select,
+textarea,
+button {
+  color: inherit;
+}
+
+[data-theme='light'] canvas {
+  /* Keep WebGL canvas readable; clear color is set in JS */
+}

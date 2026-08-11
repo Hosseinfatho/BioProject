@@ -1,26 +1,109 @@
 import React, { useState } from 'react';
+import { useTheme } from '../theme.jsx';
 
 const Title = ({ softwareName = "Software Name (title)" }) => {
   const [showAbout, setShowAbout] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const { toggleTheme, colors, isDark } = useTheme();
 
   return (
     <>
       <div style={{
         height: '100%',
         width: '100%',
-        backgroundColor: '#333333',
-        color: 'white',
+        backgroundColor: colors.headerBg,
+        color: colors.text,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         fontSize: '24px',
         fontWeight: 'bold',
-        borderBottom: '2px solid #34495e',
+        borderBottom: `2px solid ${colors.border}`,
         position: 'relative',
         boxSizing: 'border-box'
       }}>
         {softwareName}
+
+        {/* Day / Night pin switch — left of Help */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={!isDark}
+          onClick={toggleTheme}
+          title={isDark ? 'Switch to day mode' : 'Switch to night mode'}
+          aria-label={isDark ? 'Day mode off, switch to day' : 'Day mode on, switch to night'}
+          style={{
+            position: 'absolute',
+            right: '180px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: 0,
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            fontFamily: 'inherit'
+          }}
+        >
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              color: isDark ? colors.textMuted : colors.text,
+              opacity: isDark ? 0.55 : 1,
+              transition: 'opacity 0.2s, color 0.2s',
+              minWidth: '28px',
+              textAlign: 'right'
+            }}
+          >
+            Day
+          </span>
+          <span
+            style={{
+              position: 'relative',
+              width: '44px',
+              height: '24px',
+              borderRadius: '999px',
+              backgroundColor: isDark ? '#3a3a3a' : '#d0d0d0',
+              border: `1px solid ${colors.borderStrong}`,
+              boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.25)',
+              transition: 'background-color 0.25s',
+              flexShrink: 0
+            }}
+          >
+            <span
+              style={{
+                position: 'absolute',
+                top: '2px',
+                left: isDark ? '22px' : '2px',
+                width: '18px',
+                height: '18px',
+                borderRadius: '50%',
+                backgroundColor: isDark ? '#1a1a1a' : '#ffffff',
+                border: `1px solid ${isDark ? '#666' : '#bbb'}`,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.35)',
+                transition: 'left 0.22s ease, background-color 0.22s, border-color 0.22s'
+              }}
+            />
+          </span>
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              color: isDark ? colors.text : colors.textMuted,
+              opacity: isDark ? 1 : 0.55,
+              transition: 'opacity 0.2s, color 0.2s',
+              minWidth: '36px',
+              textAlign: 'left'
+            }}
+          >
+            Night
+          </span>
+        </button>
         
         {/* Help Button - Left of About */}
         <button
@@ -82,7 +165,7 @@ const Title = ({ softwareName = "Software Name (title)" }) => {
             left: 0,
             width: '100%',
             height: '100%',
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            backgroundColor: 'var(--modal-overlay, rgba(0, 0, 0, 0.7))',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -97,7 +180,7 @@ const Title = ({ softwareName = "Software Name (title)" }) => {
         >
           <div
             style={{
-              backgroundColor: '#1a1a1a',
+              backgroundColor: 'var(--surface-bg, #1a1a1a)',
               padding: '30px',
               borderRadius: '8px',
               maxWidth: '600px',
@@ -106,7 +189,8 @@ const Title = ({ softwareName = "Software Name (title)" }) => {
               overflowY: 'auto',
               border: '2px solid #4CAF50',
               boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-              position: 'relative'
+              position: 'relative',
+              color: 'var(--text-color, #ffffff)'
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -200,7 +284,7 @@ const Title = ({ softwareName = "Software Name (title)" }) => {
             left: 0,
             width: '100%',
             height: '100%',
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            backgroundColor: 'var(--modal-overlay, rgba(0, 0, 0, 0.7))',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -215,7 +299,7 @@ const Title = ({ softwareName = "Software Name (title)" }) => {
         >
           <div
             style={{
-              backgroundColor: '#1a1a1a',
+              backgroundColor: 'var(--surface-bg, #1a1a1a)',
               padding: '30px',
               borderRadius: '8px',
               maxWidth: '700px',
@@ -224,7 +308,8 @@ const Title = ({ softwareName = "Software Name (title)" }) => {
               overflowY: 'auto',
               border: '2px solid #4CAF50',
               boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-              position: 'relative'
+              position: 'relative',
+              color: 'var(--text-color, #ffffff)'
             }}
             onClick={(e) => e.stopPropagation()}
           >

@@ -7,9 +7,9 @@ const MICROENVIRONMENTS = CONFIG.MICROENVIRONMENTS ?? [];
 
 const inputStyle = {
   padding: '4px 8px',
-  backgroundColor: '#222',
-  color: '#fff',
-  border: '1px solid #444',
+  backgroundColor: 'var(--input-bg, #222)',
+  color: 'var(--text-color, #fff)',
+  border: '1px solid var(--border-color, #444)',
   borderRadius: 4,
   fontSize: '12px'
 };
@@ -263,18 +263,19 @@ function ROI({ onPositionsChange, onRoiBoxChange, highlightedRoiIndex = null, on
       style={{
         height: '100%',
         width: '100%',
-        backgroundColor: '#000000',
-        border: '1px solid #444',
+        backgroundColor: 'var(--panel-bg, #000000)',
+        border: '1px solid var(--border-color, #444)',
         padding: '1px',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'auto',
-        boxSizing: 'border-box'
+        boxSizing: 'border-box',
+        color: 'var(--text-color, #ffffff)'
       }}
     >
       {/* All controls in one line */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'nowrap', backgroundColor: '#333333', padding: '8px 12px' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#fff', fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'nowrap', backgroundColor: 'var(--header-bg, #333333)', padding: '8px 12px' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-color, #fff)', fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
           <input
             type="checkbox"
             checked={enabled}

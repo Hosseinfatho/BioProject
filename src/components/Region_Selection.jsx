@@ -286,14 +286,15 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
       style={{
         height: '100%',
         width: '100%',
-        backgroundColor: '#000000',
-        border: '1px solid #444',
+        backgroundColor: 'var(--panel-bg, #000000)',
+        border: '1px solid var(--border-color, #444)',
         padding: '1px',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
         gap: '12px',
-        boxSizing: 'border-box'
+        boxSizing: 'border-box',
+        color: 'var(--text-color, #ffffff)'
       }}
     >
       <div
@@ -301,7 +302,7 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          backgroundColor: '#333333',
+          backgroundColor: 'var(--header-bg, #333333)',
           padding: '8px 12px',
           flexShrink: 0
         }}
@@ -310,7 +311,7 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
           style={{
             margin: 0,
             fontSize: '18px',
-            color: 'white',
+            color: 'var(--text-color, white)',
             fontWeight: 500
           }}
         >
@@ -324,9 +325,9 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
             padding: '6px 12px',
             fontSize: '12px',
             fontWeight: 500,
-            color: selectedRegions.length === 0 ? '#666' : '#fff',
-            background: selectedRegions.length === 0 ? '#1a1a1a' : '#2d7ff9',
-            border: selectedRegions.length === 0 ? '1px solid #444' : '1px solid #2d7ff9',
+            color: selectedRegions.length === 0 ? '#666' : 'var(--text-color, #fff)',
+            background: selectedRegions.length === 0 ? 'var(--surface-bg, #1a1a1a)' : '#2d7ff9',
+            border: selectedRegions.length === 0 ? '1px solid var(--border-color, #444)' : '1px solid #2d7ff9',
             borderRadius: '4px',
             cursor: selectedRegions.length === 0 ? 'not-allowed' : 'pointer',
             transition: 'all 0.15s ease',
@@ -366,9 +367,9 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
             padding: '8px 12px',
             fontSize: '12px',
             fontWeight: activeTab === 'single' ? 600 : 400,
-            color: activeTab === 'single' ? '#fff' : '#b9bed0',
-            background: activeTab === 'single' ? '#1a1d29' : 'transparent',
-            border: activeTab === 'single' ? '1px solid #2d7ff9' : '1px solid #444',
+            color: activeTab === 'single' ? 'var(--text-color, #fff)' : 'var(--text-muted, #b9bed0)',
+            background: activeTab === 'single' ? 'var(--surface-bg, #1a1d29)' : 'transparent',
+            border: activeTab === 'single' ? '1px solid #2d7ff9' : '1px solid var(--border-color, #444)',
             borderRadius: '4px',
             cursor: 'pointer',
             transition: 'all 0.15s ease'
@@ -384,9 +385,9 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
             padding: '8px 12px',
             fontSize: '12px',
             fontWeight: activeTab === 'two' ? 600 : 400,
-            color: activeTab === 'two' ? '#fff' : '#b9bed0',
-            background: activeTab === 'two' ? '#1a1d29' : 'transparent',
-            border: activeTab === 'two' ? '1px solid #2d7ff9' : '1px solid #444',
+            color: activeTab === 'two' ? 'var(--text-color, #fff)' : 'var(--text-muted, #b9bed0)',
+            background: activeTab === 'two' ? 'var(--surface-bg, #1a1d29)' : 'transparent',
+            border: activeTab === 'two' ? '1px solid #2d7ff9' : '1px solid var(--border-color, #444)',
             borderRadius: '4px',
             cursor: 'pointer',
             transition: 'all 0.15s ease'
@@ -402,9 +403,9 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
             padding: '8px 12px',
             fontSize: '12px',
             fontWeight: activeTab === 'three' ? 600 : 400,
-            color: activeTab === 'three' ? '#fff' : '#b9bed0',
-            background: activeTab === 'three' ? '#1a1d29' : 'transparent',
-            border: activeTab === 'three' ? '1px solid #2d7ff9' : '1px solid #444',
+            color: activeTab === 'three' ? 'var(--text-color, #fff)' : 'var(--text-muted, #b9bed0)',
+            background: activeTab === 'three' ? 'var(--surface-bg, #1a1d29)' : 'transparent',
+            border: activeTab === 'three' ? '1px solid #2d7ff9' : '1px solid var(--border-color, #444)',
             borderRadius: '4px',
             cursor: 'pointer',
             transition: 'all 0.15s ease'
@@ -429,7 +430,7 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
                 alignItems: 'flex-start',
                 gap: '12px',
                 width: '100%',
-                background: isSelected ? '#1a1d29' : '#0f1016',
+                background: isSelected ? 'var(--surface-bg, #1a1d29)' : 'var(--surface-alt, #0f1016)',
                 borderRadius: '6px',
                 padding: '10px 12px',
                 cursor: 'pointer',
@@ -478,7 +479,7 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
               <div style={{ flex: 1 }}>
                 <div
                   style={{
-                    color: 'white',
+                    color: 'var(--text-color, white)',
                     fontSize: '14px',
                     fontWeight: 500,
                     marginBottom: '4px'
@@ -514,7 +515,7 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
                 alignItems: 'flex-start',
                 gap: '12px',
                 width: '100%',
-                background: isSelected ? '#1a1d29' : '#0f1016',
+                background: isSelected ? 'var(--surface-bg, #1a1d29)' : 'var(--surface-alt, #0f1016)',
                 borderRadius: '6px',
                 padding: '10px 12px',
                 cursor: 'pointer',
@@ -563,7 +564,7 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
               <div style={{ flex: 1 }}>
                 <div
                   style={{
-                    color: 'white',
+                    color: 'var(--text-color, white)',
                     fontSize: '14px',
                     fontWeight: 500,
                     marginBottom: '4px'
@@ -599,7 +600,7 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
                 alignItems: 'flex-start',
                 gap: '12px',
                 width: '100%',
-                background: isSelected ? '#1a1d29' : '#0f1016',
+                background: isSelected ? 'var(--surface-bg, #1a1d29)' : 'var(--surface-alt, #0f1016)',
                 borderRadius: '6px',
                 padding: '10px 12px',
                 cursor: 'pointer',
@@ -648,7 +649,7 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
               <div style={{ flex: 1 }}>
                 <div
                   style={{
-                    color: 'white',
+                    color: 'var(--text-color, white)',
                     fontSize: '14px',
                     fontWeight: 500,
                     marginBottom: '4px'

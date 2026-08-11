@@ -6,6 +6,7 @@ import Main_View from './components/Main_View';
 import Local_View from './components/Local_View';
 import Graph_Pannel from './components/Graph_Pannel';
 import ROI from './components/ROI';
+import { useTheme } from './theme.jsx';
 
 // Helper function to convert RGB to hex
 const rgbToHex = (r, g, b) => {
@@ -16,6 +17,7 @@ const rgbToHex = (r, g, b) => {
 };
 
 function App() {
+  const { colors } = useTheme();
   const [channels, setChannels] = useState([]);
   const [selectedRegions, setSelectedRegions] = useState([]);
   const [presetVersion, setPresetVersion] = useState(0);
@@ -26,6 +28,106 @@ function App() {
   const [roiBoxes, setRoiBoxes] = useState(null);
   const [highlightedRoiIndex, setHighlightedRoiIndex] = useState(null); // 1-based; hover on 3D box or chart bar
   const lastSelectionBoundsRef = useRef(null); // Persist selection bounds across region switches
+
+  // Left sidebar (Channel + Region Selection) width as % of main content; right side fills the rest
+  const [leftWidthPct, setLeftWidthPct] = useState(() => {
+    const saved = Number(localStorage.getItem('layout.leftWidthPct'));
+    return Number.isFinite(saved) && saved >= 15 && saved <= 50 ? saved : 25;
+  });
+  const [isResizingLeft, setIsResizingLeft] = useState(false);
+  const mainRowRef = useRef(null);
+  const leftWidthPctRef = useRef(leftWidthPct);
+
+  // Main View height as % of right column; bottom row fills the rest
+  const [mainHeightPct, setMainHeightPct] = useState(() => {
+    const saved = Number(localStorage.getItem('layout.mainHeightPct'));
+    return Number.isFinite(saved) && saved >= 35 && saved <= 85 ? saved : 68;
+  });
+  const [isResizingMain, setIsResizingMain] = useState(false);
+  const rightColumnRef = useRef(null);
+  const mainHeightPctRef = useRef(mainHeightPct);
+
+  useEffect(() => {
+    leftWidthPctRef.current = leftWidthPct;
+  }, [leftWidthPct]);
+
+  useEffect(() => {
+    mainHeightPctRef.current = mainHeightPct;
+  }, [mainHeightPct]);
+
+  useEffect(() => {
+    if (!isResizingLeft) return undefined;
+
+    const MIN_PCT = 15;
+    const MAX_PCT = 50;
+
+    const onMove = (event) => {
+      const row = mainRowRef.current;
+      if (!row) return;
+      const rect = row.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const next = ((event.clientX - rect.left) / rect.width) * 100;
+      const clamped = Math.min(MAX_PCT, Math.max(MIN_PCT, next));
+      leftWidthPctRef.current = clamped;
+      setLeftWidthPct(clamped);
+      window.dispatchEvent(new Event('resize'));
+    };
+
+    const onUp = () => {
+      setIsResizingLeft(false);
+      localStorage.setItem('layout.leftWidthPct', String(leftWidthPctRef.current));
+      window.dispatchEvent(new Event('resize'));
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+
+    return () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [isResizingLeft]);
+
+  useEffect(() => {
+    if (!isResizingMain) return undefined;
+
+    const MIN_PCT = 35;
+    const MAX_PCT = 85;
+
+    const onMove = (event) => {
+      const col = rightColumnRef.current;
+      if (!col) return;
+      const rect = col.getBoundingClientRect();
+      if (rect.height <= 0) return;
+      const next = ((event.clientY - rect.top) / rect.height) * 100;
+      const clamped = Math.min(MAX_PCT, Math.max(MIN_PCT, next));
+      mainHeightPctRef.current = clamped;
+      setMainHeightPct(clamped);
+      window.dispatchEvent(new Event('resize'));
+    };
+
+    const onUp = () => {
+      setIsResizingMain(false);
+      localStorage.setItem('layout.mainHeightPct', String(mainHeightPctRef.current));
+      window.dispatchEvent(new Event('resize'));
+    };
+
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+
+    return () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, [isResizingMain]);
 
   const handleChannelsChange = useCallback((updatedChannels) => {
     console.log('App: Channels updated:', updatedChannels.length, 'channels');
@@ -147,7 +249,8 @@ function App() {
       width: '100vw',
       height: '100vh',
       overflow: 'hidden',
-      backgroundColor: '#000000',
+      backgroundColor: colors.appBg,
+      color: colors.text,
       position: 'fixed',
       top: 0,
       left: 0,
@@ -159,17 +262,20 @@ function App() {
       </div>
 
       {/* Main Content Area */}
-      <div style={{
-        flex: 1,
-        width: '100%',
-        display: 'flex',
-        overflow: 'hidden',
-        boxSizing: 'border-box',
-        minHeight: 0
-      }}>
-        {/* Left Sidebar - 100% of main content height, 25% width */}
+      <div
+        ref={mainRowRef}
+        style={{
+          flex: 1,
+          width: '100%',
+          display: 'flex',
+          overflow: 'hidden',
+          boxSizing: 'border-box',
+          minHeight: 0
+        }}
+      >
+        {/* Left Sidebar — Channel Selection + Region Selection (resizable width) */}
         <div style={{
-          width: '25%',
+          width: `${leftWidthPct}%`,
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
@@ -210,21 +316,53 @@ function App() {
           </div>
         </div>
 
-        {/* Right Section - 100% of main content height, 75% width */}
-        <div style={{
-          width: '75%',
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          boxSizing: 'border-box',
-          flexShrink: 0,
-          minWidth: 0,
-          minHeight: 0
-        }}>
-          {/* Main View - 68% height */}
+        {/* Drag handle — resize left sidebar width */}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize channel and region selection width"
+          aria-valuemin={15}
+          aria-valuemax={50}
+          aria-valuenow={Math.round(leftWidthPct)}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            setIsResizingLeft(true);
+          }}
+          style={{
+            width: '6px',
+            height: '100%',
+            flexShrink: 0,
+            cursor: 'col-resize',
+            backgroundColor: isResizingLeft ? '#4CAF50' : colors.border,
+            transition: isResizingLeft ? 'none' : 'background-color 0.15s',
+            position: 'relative',
+            zIndex: 5
+          }}
+          onMouseEnter={(e) => {
+            if (!isResizingLeft) e.currentTarget.style.backgroundColor = '#4CAF50';
+          }}
+          onMouseLeave={(e) => {
+            if (!isResizingLeft) e.currentTarget.style.backgroundColor = colors.border;
+          }}
+        />
+
+        {/* Right Section — Main View + bottom panels (fills remaining width) */}
+        <div
+          ref={rightColumnRef}
+          style={{
+            flex: 1,
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            boxSizing: 'border-box',
+            minWidth: 0,
+            minHeight: 0
+          }}
+        >
+          {/* Main View — resizable height */}
           <div style={{
-            height: '68%',
+            height: `${mainHeightPct}%`,
             width: '100%',
             overflow: 'hidden',
             boxSizing: 'border-box',
@@ -242,14 +380,43 @@ function App() {
             />
           </div>
 
-          {/* Bottom panels - 32% height */}
+          {/* Drag handle — resize Main View height */}
+          <div
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Resize main view height"
+            aria-valuemin={35}
+            aria-valuemax={85}
+            aria-valuenow={Math.round(mainHeightPct)}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setIsResizingMain(true);
+            }}
+            style={{
+              height: '6px',
+              width: '100%',
+              flexShrink: 0,
+              cursor: 'row-resize',
+              backgroundColor: isResizingMain ? '#4CAF50' : colors.border,
+              transition: isResizingMain ? 'none' : 'background-color 0.15s',
+              position: 'relative',
+              zIndex: 5
+            }}
+            onMouseEnter={(e) => {
+              if (!isResizingMain) e.currentTarget.style.backgroundColor = '#4CAF50';
+            }}
+            onMouseLeave={(e) => {
+              if (!isResizingMain) e.currentTarget.style.backgroundColor = colors.border;
+            }}
+          />
+
+          {/* Bottom panels — Local / Graph / ROI (fills remaining height) */}
           <div style={{
-            height: '32%',
+            flex: 1,
             width: '100%',
             display: 'flex',
             overflow: 'hidden',
             boxSizing: 'border-box',
-            flexShrink: 0,
             minHeight: 0
           }}>
             {/* Local View */}
