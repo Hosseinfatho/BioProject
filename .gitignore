@@ -13,6 +13,8 @@ biomedvis-high-res/
 dist/
 build/
 visualization_data/
+visualization_data_low/
+visualization_data_lo/
 # IDE
 .vscode/
 .idea/
