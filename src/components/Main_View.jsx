@@ -25,10 +25,9 @@ const FAST_MOVE_SPEED = 0.15;
 const LOD_COOLDOWN_MS = 200;
 /**
  * Max rendered voxels per channel (after threshold).
- * Server / high-quality: set very high so 1–2 high-res channels keep sampling=1.
- * Full high-res volume is ~182M voxels; this cap sits above that.
+ * 50M: online-friendly — High Res (~182M voxels) will auto-raise sampling.
  */
-const MAX_POINTS_PER_CHANNEL = 500000000;
+const MAX_POINTS_PER_CHANNEL = 50000000;
 const OPACITY_FLOOR = 0.35;
 const OPACITY_BOOST = 1.3;
 const EDGE_FEATHER = 0.99;
