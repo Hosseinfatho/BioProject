@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
@@ -139,7 +139,7 @@ const getChannelCacheKey = (config) => {
 // Position space in ROI JSON uses grid index × 16; same as 60_model.py coord_scale
 const ROI_POSITION_SCALE = 16;
 
-const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initialSelectionBounds, selectedRegionsData = [], roiBoxes = null, onRoiHover = null }) => {
+const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionChange, initialSelectionBounds, selectedRegionsData = [], roiBoxes = null, onRoiHover = null }, ref) => {
   const { colors, theme } = useTheme();
   const mountRef = useRef(null);
   const sceneRef = useRef(null);
@@ -191,6 +191,7 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
   }, [selectionEnd]);
 
   const cameraStateRef = useRef(cloneCameraState());
+  const pendingPresetSelectionsRef = useRef(null);
 
   // Always prefer full voxel resolution on server (sampling=1).
   // Distance-based thinning disabled so 1–2 channels stay at highest quality.
@@ -1040,6 +1041,45 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
       console.error('Main_View: Error stack:', error.stack);
     }
   }, [channels, onSelectionChange, extractSelectedRegion]);
+
+  useImperativeHandle(ref, () => ({
+    getCameraState: () => cloneCameraState(cameraStateRef.current),
+    applyCameraState: (camera) => {
+      if (!camera) return;
+      cameraStateRef.current = cloneCameraState(camera);
+      updateCameraPosition();
+      updateChannelLOD(true);
+      renderScene();
+    },
+    applyPresetSelections: async (worldBoundsList = []) => {
+      pendingPresetSelectionsRef.current = worldBoundsList;
+      if (!worldBoundsList.length) return;
+
+      const toVec3 = (p) => {
+        if (!p) return new THREE.Vector3();
+        if (p.isVector3) return p.clone();
+        return new THREE.Vector3(p.x, p.y, p.z);
+      };
+
+      for (const raw of worldBoundsList) {
+        if (!raw) continue;
+        const worldBounds = {
+          min: toVec3(raw.min),
+          max: toVec3(raw.max),
+          center: toVec3(raw.center),
+          size: toVec3(raw.size)
+        };
+        currentSelectionBoundsRef.current = worldBounds;
+        updateCuboidWireframe(worldBounds);
+        setCuboidCenter(worldBounds.center);
+        setCuboidSize(worldBounds.size);
+        await handleSelectionComplete(worldBounds);
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      pendingPresetSelectionsRef.current = null;
+      renderScene();
+    }
+  }), [updateCameraPosition, updateChannelLOD, renderScene, handleSelectionComplete]);
 
   // Refresh selection when channels change or data loads
   useEffect(() => {
@@ -2148,7 +2188,9 @@ const Main_View = ({ channels = [], activeRegions = [], onSelectionChange, initi
       )}
     </div>
   );
-};
+});
+
+Main_View.displayName = 'Main_View';
 
 export default Main_View;
 

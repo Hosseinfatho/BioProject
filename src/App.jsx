@@ -8,6 +8,13 @@ import Graph_Pannel from './components/Graph_Pannel';
 import ROI from './components/ROI';
 import { useTheme } from './theme.jsx';
 import { useDataResolution } from './dataResolution.jsx';
+import bundledExampleScene from './presets/exampleScene.json';
+import {
+  buildSceneSnapshot,
+  downloadSceneSnapshot,
+  saveSceneSnapshotLocal,
+  loadSceneSnapshotLocal
+} from './presets/scenePreset.js';
 
 // Helper function to convert RGB to hex
 const rgbToHex = (r, g, b) => {
@@ -19,12 +26,14 @@ const rgbToHex = (r, g, b) => {
 
 function App() {
   const { colors } = useTheme();
-  const { channelDataDir } = useDataResolution();
+  const { channelDataDir, resolution, setResolution } = useDataResolution();
   const [channels, setChannels] = useState([]);
   const [selectedRegions, setSelectedRegions] = useState([]);
   const [presetVersion, setPresetVersion] = useState(0);
   const lastAggregatedSignatureRef = useRef('');
   const resolutionReadyRef = useRef(false);
+  const mainViewRef = useRef(null);
+  const exampleApplyTokenRef = useRef(0);
 
   const [selectedRegionsData, setSelectedRegionsData] = useState([]);
   const [roiPositions, setRoiPositions] = useState([]);
@@ -269,6 +278,78 @@ function App() {
     setPresetVersion((prev) => prev + 1);
   }, [channelDataDir]);
 
+  const handleSaveExample = useCallback(() => {
+    const camera = mainViewRef.current?.getCameraState?.() || null;
+    const snapshot = buildSceneSnapshot({
+      resolution,
+      channels,
+      camera,
+      selections: selectedRegionsData
+    });
+    saveSceneSnapshotLocal(snapshot);
+    downloadSceneSnapshot(snapshot, 'exampleScene.json');
+    console.log('App: Example scene saved (download + localStorage)', snapshot);
+    window.alert(
+      'Scene saved.\n\n1) exampleScene.json downloaded\n2) Also stored in this browser\n\nNext: put that file into src/presets/exampleScene.json (enabled: true), then Example will load it for everyone.'
+    );
+  }, [resolution, channels, selectedRegionsData]);
+
+  const handleLoadExample = useCallback(async () => {
+    const bundled = bundledExampleScene?.enabled ? bundledExampleScene : null;
+    const local = loadSceneSnapshotLocal();
+    const snapshot = bundled || local;
+    if (!snapshot) {
+      window.alert(
+        'No Example scene yet.\n\nArrange the view (channels, zoom, boxes, filters), then click Save Scene.'
+      );
+      return;
+    }
+
+    const token = ++exampleApplyTokenRef.current;
+    console.log('App: Loading Example scene', snapshot.name || snapshot);
+
+    if (snapshot.resolution && snapshot.resolution !== resolution) {
+      setResolution(snapshot.resolution);
+    }
+
+    setSelectedRegions([]);
+    setSelectedRegionsData([]);
+    lastSelectionBoundsRef.current = null;
+
+    const nextChannels = (snapshot.channels || []).map((ch, index) => ({
+      ...ch,
+      id: ch.id ?? index,
+      channelBasePath:
+        ch.channelBasePath ||
+        (snapshot.resolution === 'very'
+          ? 'visualization_data_very_high'
+          : snapshot.resolution === 'low'
+            ? 'visualization_data_low'
+            : 'visualization_data'),
+      visible: ch.visible !== false,
+      opacity: ch.opacity ?? 1
+    }));
+    setChannels(nextChannels);
+    setPresetVersion((v) => v + 1);
+
+    // Wait for Main View to load channel volumes, then restore camera + boxes
+    const waitMs = snapshot.resolution === 'very' ? 8000 : snapshot.resolution === 'high' ? 4000 : 1500;
+    await new Promise((r) => setTimeout(r, waitMs));
+    if (token !== exampleApplyTokenRef.current) return;
+
+    if (snapshot.camera) {
+      mainViewRef.current?.applyCameraState?.(snapshot.camera);
+    }
+
+    const boundsList = (snapshot.selections || [])
+      .map((s) => s.worldBounds)
+      .filter(Boolean);
+    if (boundsList.length) {
+      await mainViewRef.current?.applyPresetSelections?.(boundsList);
+    }
+    console.log('App: Example scene applied');
+  }, [resolution, setResolution]);
+
   return (
     <div style={{
       display: 'flex',
@@ -285,7 +366,11 @@ function App() {
     }}>
       {/* Title ribbon — compact height */}
       <div style={{ width: '100%', flexShrink: 0, overflow: 'hidden' }}>
-        <Title softwareName="ConGAT: Context-aware graph attention network for 3D region of interest discovery in multiplexed microscopy images" />
+        <Title
+          softwareName="ConGAT: Context-aware graph attention network for 3D region of interest discovery in multiplexed microscopy images"
+          onLoadExample={handleLoadExample}
+          onSaveExample={handleSaveExample}
+        />
       </div>
 
       {/* Main Content Area */}
@@ -397,6 +482,7 @@ function App() {
             minHeight: 0
           }}>
             <Main_View
+              ref={mainViewRef}
               channels={channels}
               activeRegions={selectedRegions}
               onSelectionChange={handleSelectionChange}

@@ -2,7 +2,11 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTheme } from '../theme.jsx';
 import graphicalAbstract from '../../graphical_abstract.jpg';
 
-const Title = ({ softwareName = "Software Name (title)" }) => {
+const Title = ({
+  softwareName = "Software Name (title)",
+  onLoadExample,
+  onSaveExample
+}) => {
   const [showAbout, setShowAbout] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const { toggleTheme, colors, isDark } = useTheme();
@@ -99,6 +103,50 @@ const Title = ({ softwareName = "Software Name (title)" }) => {
           gap: '10px',
           flexShrink: 0
         }}>
+          {typeof onSaveExample === 'function' && (
+            <button
+              type="button"
+              onClick={onSaveExample}
+              title="Save current channels, camera, filters and boxes as Example scene JSON"
+              style={{
+                padding: '5px 10px',
+                backgroundColor: 'transparent',
+                color: colors.text,
+                border: `1px solid ${colors.borderStrong}`,
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: 700,
+                lineHeight: 1.2
+              }}
+            >
+              Save Scene
+            </button>
+          )}
+          {typeof onLoadExample === 'function' && (
+            <button
+              type="button"
+              onClick={onLoadExample}
+              title="Load the Example demo scene (camera, boxes, filters, stats)"
+              style={{
+                padding: '5px 12px',
+                backgroundColor: '#2e7d32',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 'bold',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                lineHeight: 1.2
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#256628'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#2e7d32'; }}
+            >
+              Example
+            </button>
+          )}
+
           {/* Day / Night pin switch */}
           <button
             type="button"

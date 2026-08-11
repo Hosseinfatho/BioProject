@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "enabled": true,
+  "name": "Example scene",
+  "resolution": "very",
+  "channels": [
+    {
+      "id": "inflammation-3",
+      "channelIndex": 3,
+      "channelBasePath": "visualization_data_very_high",
+      "color": "#1b9e77",
+      "opacity": 1,
+      "thresholdMin": 1756,
+      "thresholdMax": 31608,
+      "dataRange": [
+        0,
+        35120
+      ],
+      "visible": true
+    },
+    {
+      "id": "inflammation-2",
+      "channelIndex": 2,
+      "channelBasePath": "visualization_data_very_high",
+      "color": "#d95f02",
+      "opacity": 1,
+      "thresholdMin": 1717,
+      "thresholdMax": 30911,
+      "dataRange": [
+        0,
+        34346
+      ],
+      "visible": true
+    },
+    {
+      "id": "inflammation-31",
+      "channelIndex": 31,
+      "channelBasePath": "visualization_data_very_high",
+      "color": "#7570b3",
+      "opacity": 1,
+      "thresholdMin": 1008,
+      "thresholdMax": 18146,
+      "dataRange": [
+        0,
+        20162
+      ],
+      "visible": true
+    },
+    {
+      "id": "inflammation-42",
+      "channelIndex": 42,
+      "channelBasePath": "visualization_data_very_high",
+      "color": "#e7298a",
+      "opacity": 1,
+      "thresholdMin": 1327,
+      "thresholdMax": 23885,
+      "dataRange": [
+        0,
+        26539
+      ],
+      "visible": true
+    }
+  ],
+  "camera": {
+    "rotation": {
+      "x": 0.27,
+      "y": 2.9615926535897956
+    },
+    "distance": 0.7235703703703704,
+    "panOffset": {
+      "x": 0.005007485096017987,
+      "y": 0.0021244311344321603,
+      "z": 0.009395027745732712
+    }
+  },
+  "selections": [
+    {
+      "worldBounds": {
+        "min": {
+          "x": -0.5010704247641148,
+          "y": 0.11061228631013134,
+          "z": -0.03666666666666667
+        },
+        "max": {
+          "x": -0.4307440894240494,
+          "y": 0.15699774153442975,
+          "z": 0.03666666666666667
+        },
+        "center": {
+          "x": -0.4659072570940821,
+          "y": 0.13380501392228056,
+          "z": 0
+        },
+        "size": {
+          "x": 0.07032633534006538,
+          "y": 0.046385455224298405,
+          "z": 0.07333333333333333
+        }
+      }
+    },
+    {
+      "worldBounds": {
+        "min": {
+          "x": -0.007289772376422126,
+          "y": -0.14525586992712755,
+          "z": -0.03666666666666667
+        },
+        "max": {
+          "x": 0.0959552731228225,
+          "y": -0.05547756949300166,
+          "z": 0.03666666666666667
+        },
+        "center": {
+          "x": 0.04433275037320018,
+          "y": -0.10036671971006461,
+          "z": 0
+        },
+        "size": {
+          "x": 0.10324504549924463,
+          "y": 0.0897783004341259,
+          "z": 0.07333333333333333
+        }
+      }
+    },
+    {
+      "worldBounds": {
+        "min": {
+          "x": 0.5807580954671023,
+          "y": -0.3457607408966754,
+          "z": -0.03666666666666667
+        },
+        "max": {
+          "x": 0.6660474808795223,
+          "y": -0.27244179554213926,
+          "z": 0.03666666666666667
+        },
+        "center": {
+          "x": 0.6234027881733123,
+          "y": -0.3091012682194073,
+          "z": 0
+        },
+        "size": {
+          "x": 0.08528938541241993,
+          "y": 0.07331894535453615,
+          "z": 0.07333333333333333
+        }
+      }
+    }
+  ]
+}
