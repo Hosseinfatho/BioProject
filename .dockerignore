@@ -11,7 +11,7 @@ general.ipynb
 
 # Huge local datasets (mounted as volumes on the server instead)
 visualization_data
-visualization_data_lo
+visualization_data_low
 Data
 downloadData
 VIS2026/Hi_res/Hi_res_dataset

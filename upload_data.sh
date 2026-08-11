@@ -3,7 +3,7 @@
 # Run in Git Bash on Windows.
 #
 #   bash upload_data.sh visualization_data
-#   bash upload_data.sh visualization_data_lo
+#   bash upload_data.sh visualization_data_low
 #   bash upload_data.sh all
 
 set -euo pipefail
@@ -61,7 +61,7 @@ upload_dir() {
 if [[ "$LOCAL_DIR" == "all" ]]; then
   upload_dir visualization_data
   echo
-  upload_dir visualization_data_lo
+  upload_dir visualization_data_low
 else
   upload_dir "$LOCAL_DIR"
 fi

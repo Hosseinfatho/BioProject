@@ -8,7 +8,7 @@ const serveOutputPlugin = {
   name: 'serve-output',
   configureServer(server) {
     server.middlewares.use((req, res, next) => {
-      const visualizationMatch = req.url.match(/(?:\/BioProject)?\/(visualization_data_low|visualization_data_lo|visualization_data)\/(.+)$/)
+      const visualizationMatch = req.url.match(/(?:\/BioProject)?\/(visualization_data_low|visualization_data)\/(.+)$/)
       if (visualizationMatch) {
         const dirName = visualizationMatch[1]
         const subPath = visualizationMatch[2].split('?')[0]

@@ -6,11 +6,9 @@ export const CONFIG = {
     VISUALIZATION_DATA_DIR: 'visualization_data',
     /**
      * Low Res toggle (default): lighter pyramid (S3 component 5 ≈ 194×172×340).
-     * Local folder name is visualization_data_low (also accept visualization_data_lo on server).
+     * Folder name: visualization_data_low
      */
     LOW_RES_CHANNEL_DIR: 'visualization_data_low',
-    /** Alternate low-res folder name used on some deploy scripts */
-    LOW_RES_CHANNEL_DIR_ALT: 'visualization_data_lo',
     /** Optional window crop from preparation_high_res.py (future higher-res step) */
     HI_RES_CHANNEL_DIR: 'VIS2026/Hi_res/HI_res_channel',
     DATA_DIR: 'Data',

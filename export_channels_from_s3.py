@@ -7,7 +7,7 @@ Examples:
   python export_channels_from_s3.py --component 4
 
   # Low-res for manually added channels
-  python export_channels_from_s3.py --component 5 --output visualization_data_lo
+  python export_channels_from_s3.py --component 5 --output visualization_data_low
 """
 from __future__ import annotations
 

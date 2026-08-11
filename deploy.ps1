@@ -28,7 +28,7 @@ Write-Host "==> Checking SSH to $Target ..."
 ssh $Target "echo connected; hostname; docker --version"
 
 Write-Host "==> Creating remote dirs"
-ssh $Target "mkdir -p $RemoteDir/visualization_data $RemoteDir/visualization_data_lo $RemoteDir/VIS2026/output $RemoteDir/VIS2026/Hi_res/HI_res_channel"
+ssh $Target "mkdir -p $RemoteDir/visualization_data $RemoteDir/visualization_data_low $RemoteDir/VIS2026/output $RemoteDir/VIS2026/Hi_res/HI_res_channel"
 
 # Prefer scp for Windows if rsync missing
 function Sync-Dir($Local, $RemoteSub) {
@@ -42,12 +42,12 @@ function Sync-Dir($Local, $RemoteSub) {
 
 Write-Host "==> Syncing project files (excluding heavy data)"
 $excludes = @(
-  "node_modules", "dist", ".git", "visualization_data", "visualization_data_lo",
+  "node_modules", "dist", ".git", "visualization_data", "visualization_data_low",
   "Data", "downloadData", "general.ipynb"
 )
 # Copy compose + docker + src via tar over ssh (portable)
 tar --exclude=node_modules --exclude=dist --exclude=.git `
-    --exclude=visualization_data --exclude=visualization_data_lo `
+    --exclude=visualization_data --exclude=visualization_data_low `
     --exclude=Data --exclude=downloadData --exclude=general.ipynb `
     --exclude=VIS2026/Hi_res/Hi_res_dataset --exclude=VIS2026/Hi_res_128_128_194 `
     -czf - . | ssh $Target "cd $RemoteDir && tar -xzf -"
@@ -56,7 +56,7 @@ if (-not $SkipData) {
   Write-Host "==> Syncing HIGH-res data (~3GB)"
   Sync-Dir "$Root\visualization_data" "visualization_data"
   Write-Host "==> Syncing LOW-res data (~0.8GB)"
-  Sync-Dir "$Root\visualization_data_lo" "visualization_data_lo"
+  Sync-Dir "$Root\visualization_data_low" "visualization_data_low"
   Write-Host "==> Syncing VIS2026/output"
   Sync-Dir "$Root\VIS2026\output" "VIS2026/output"
   if (Test-Path "$Root\VIS2026\Hi_res\HI_res_channel") {

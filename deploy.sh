@@ -17,7 +17,7 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
 echo "==> Ensuring remote directory: $REMOTE_DIR"
-ssh "$TARGET" "mkdir -p $REMOTE_DIR/visualization_data $REMOTE_DIR/visualization_data_lo $REMOTE_DIR/VIS2026/output $REMOTE_DIR/VIS2026/Hi_res/HI_res_channel"
+ssh "$TARGET" "mkdir -p $REMOTE_DIR/visualization_data $REMOTE_DIR/visualization_data_low $REMOTE_DIR/VIS2026/output $REMOTE_DIR/VIS2026/Hi_res/HI_res_channel"
 
 echo "==> Syncing app sources (no channel .raw in image context)"
 rsync -avz --delete \
@@ -25,7 +25,7 @@ rsync -avz --delete \
   --exclude dist \
   --exclude .git \
   --exclude visualization_data \
-  --exclude visualization_data_lo \
+  --exclude visualization_data_low \
   --exclude 'VIS2026/Hi_res/Hi_res_dataset' \
   --exclude 'VIS2026/Hi_res_128_128_194' \
   --exclude 'VIS2026/**/*.raw' \
@@ -38,8 +38,8 @@ rsync -avz --delete \
 echo "==> Syncing HIGH-res channel data (~3GB) -> visualization_data/"
 rsync -avz --progress ./visualization_data/ "$TARGET:$REMOTE_DIR/visualization_data/"
 
-echo "==> Syncing LOW-res channel data (~0.8GB) -> visualization_data_lo/"
-rsync -avz --progress ./visualization_data_lo/ "$TARGET:$REMOTE_DIR/visualization_data_lo/"
+echo "==> Syncing LOW-res channel data (~0.8GB) -> visualization_data_low/"
+rsync -avz --progress ./visualization_data_low/ "$TARGET:$REMOTE_DIR/visualization_data_low/"
 
 echo "==> Syncing ROI / positions JSON"
 rsync -avz ./VIS2026/output/ "$TARGET:$REMOTE_DIR/VIS2026/output/"

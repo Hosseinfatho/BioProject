@@ -278,15 +278,13 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
     const otherDir = isLowRes
       ? (CONFIG.VISUALIZATION_DATA_DIR || 'visualization_data')
       : (CONFIG.LOW_RES_CHANNEL_DIR || 'visualization_data_low');
-    const altLow = CONFIG.LOW_RES_CHANNEL_DIR_ALT || 'visualization_data_lo';
     const paths = [
       `${baseUrl}/${channelBasePath}/channel_0_napari_metadata.json`,
       `${baseUrl}/${channelBasePath}/channel_0_data.json`,
       `${baseUrl}/${channelBasePath}/channel_0_metadata.json`,
-      // Fallback to the other resolution / alt low-res folder name
+      // Fallback to the other resolution if selected data is missing
       `${baseUrl}/${otherDir}/channel_0_napari_metadata.json`,
-      `${baseUrl}/${otherDir}/channel_0_metadata.json`,
-      `${baseUrl}/${altLow}/channel_0_metadata.json`
+      `${baseUrl}/${otherDir}/channel_0_metadata.json`
     ];
 
     for (const path of paths) {

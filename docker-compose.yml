@@ -12,10 +12,10 @@ services:
       # Host 9595 → nginx 9595  →  https://arcade.evl.uic.edu/congat
       - "9595:9595"
     volumes:
-      # High-res (S3 component 3) — used by Region Selection
+      # High Res toggle — denser pyramid
       - ./visualization_data:/usr/share/nginx/html/congat/visualization_data:ro
-      # Low-res (S3 component 5) — used by "+ Add Channel"
-      - ./visualization_data_lo:/usr/share/nginx/html/congat/visualization_data_lo:ro
+      # Low Res toggle — lighter pyramid
+      - ./visualization_data_low:/usr/share/nginx/html/congat/visualization_data_low:ro
       - ./VIS2026/output:/usr/share/nginx/html/congat/VIS2026/output:ro
       - ./VIS2026/Hi_res/HI_res_channel:/usr/share/nginx/html/congat/VIS2026/Hi_res/HI_res_channel:ro
     healthcheck:
