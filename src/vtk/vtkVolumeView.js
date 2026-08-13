@@ -20,6 +20,52 @@ import vtkActor from '@kitware/vtk.js/Rendering/Core/Actor';
 
 const DEFAULT_MAX_VOXELS = 40_000_000;
 
+/**
+ * Trackball with easy scene move:
+ * - Left-drag = pan (move volume)
+ * - Shift+Left = rotate
+ * - Ctrl/Alt+Left = spin
+ * - Middle/Right-drag = pan
+ * - Wheel = zoom
+ *
+ * VTK freezes handler methods on the style instance, so we wrap with a Proxy
+ * instead of assigning to handleLeftButtonPress.
+ */
+function createTrackballStyle() {
+  const style = vtkInteractorStyleTrackballCamera.newInstance();
+
+  const leftPress = (...args) => style.handleLeftButtonPress(...args);
+  const leftRelease = (...args) => style.handleLeftButtonRelease(...args);
+
+  const panAwareLeftPress = (callData) => {
+    if (!callData.shiftKey && !callData.controlKey && !callData.altKey) {
+      // Default left-drag moves the scene (pan)
+      return leftPress({ ...callData, shiftKey: true });
+    }
+    if (callData.shiftKey && !callData.controlKey && !callData.altKey) {
+      // Shift+left rotates
+      return leftPress({ ...callData, shiftKey: false, controlKey: false, altKey: false });
+    }
+    return leftPress(callData);
+  };
+
+  const startPanPress = (callData) =>
+    leftPress({ ...callData, shiftKey: true, controlKey: false, altKey: false });
+
+  return new Proxy(style, {
+    get(target, prop, receiver) {
+      if (prop === 'handleLeftButtonPress') return panAwareLeftPress;
+      if (prop === 'handleMiddleButtonPress' || prop === 'handleRightButtonPress') {
+        return startPanPress;
+      }
+      if (prop === 'handleMiddleButtonRelease' || prop === 'handleRightButtonRelease') {
+        return leftRelease;
+      }
+      return Reflect.get(target, prop, receiver);
+    }
+  });
+}
+
 const hexToRgb = (hex) => {
   const h = String(hex || '#ffffff').replace('#', '');
   return {
@@ -291,7 +337,14 @@ export function createVtkVolumeView(container, options = {}) {
   const interactor = grw.getInteractor();
 
   if (interactive) {
-    interactor.setInteractorStyle(vtkInteractorStyleTrackballCamera.newInstance());
+    interactor.setInteractorStyle(createTrackballStyle());
+    // Target ~20 FPS while dragging; full quality when still.
+    if (typeof interactor.setDesiredUpdateRate === 'function') {
+      interactor.setDesiredUpdateRate(22);
+    }
+    if (typeof interactor.setStillUpdateRate === 'function') {
+      interactor.setStillUpdateRate(0.0001);
+    }
   } else {
     // Main View drives camera from Three.js mouse handlers.
     try {
@@ -299,23 +352,55 @@ export function createVtkVolumeView(container, options = {}) {
     } catch (_) { /* */ }
   }
 
-  const setInteractive = (enabled) => {
-    try {
-      if (enabled) {
-        if (typeof interactor.enable === 'function') interactor.enable();
-        interactor.setInteractorStyle(vtkInteractorStyleTrackballCamera.newInstance());
-        if (typeof interactor.bindEvents === 'function') {
-          interactor.bindEvents(container);
+  /** Coarser rays while orbiting; restore on mouse-up. Agility > still quality during drag. */
+  const setInteractionLod = (active) => {
+    volumesByKey.forEach((bundle) => {
+      const mapper = bundle?.mapper;
+      const prop = bundle?.prop || bundle?.volume?.getProperty?.();
+      if (!mapper) return;
+      if (active) {
+        if (bundle._stillSampleDistance == null) {
+          bundle._stillSampleDistance = mapper.getSampleDistance?.() ?? 0.5;
         }
+        if (bundle._stillImageSampleDistance == null && typeof mapper.getImageSampleDistance === 'function') {
+          bundle._stillImageSampleDistance = mapper.getImageSampleDistance();
+        }
+        if (bundle._stillShade == null && prop?.getShade) {
+          bundle._stillShade = prop.getShade();
+        }
+        const still = bundle._stillSampleDistance || 0.5;
+        mapper.setSampleDistance(still * 3.5);
+        if (typeof mapper.setImageSampleDistance === 'function') {
+          mapper.setImageSampleDistance(Math.max(3, (bundle._stillImageSampleDistance || 1) * 3));
+        }
+        // Shading is expensive per ray sample — disable only while dragging
+        if (prop?.setShade) prop.setShade(false);
       } else {
-        // Freeze camera while user draws a 3D selection box.
-        if (typeof interactor.disable === 'function') interactor.disable();
-        else if (typeof interactor.unbindEvents === 'function') interactor.unbindEvents();
+        if (bundle._stillSampleDistance != null) {
+          mapper.setSampleDistance(bundle._stillSampleDistance);
+          bundle._stillSampleDistance = null;
+        }
+        if (typeof mapper.setImageSampleDistance === 'function' && bundle._stillImageSampleDistance != null) {
+          mapper.setImageSampleDistance(bundle._stillImageSampleDistance);
+          bundle._stillImageSampleDistance = null;
+        }
+        if (prop?.setShade && bundle._stillShade != null) {
+          prop.setShade(bundle._stillShade);
+          bundle._stillShade = null;
+        }
       }
-    } catch (err) {
-      console.warn('VTK setInteractive failed:', err);
-    }
+    });
   };
+
+  try {
+    interactor.onStartInteractionEvent?.(() => {
+      setInteractionLod(true);
+    });
+    interactor.onEndInteractionEvent?.(() => {
+      setInteractionLod(false);
+      renderWindow.render();
+    });
+  } catch (_) { /* */ }
 
   // Style VTK canvas under the Three overlay
   try {
@@ -324,6 +409,8 @@ export function createVtkVolumeView(container, options = {}) {
       canvas.style.width = '100%';
       canvas.style.height = '100%';
       canvas.style.display = 'block';
+      canvas.style.touchAction = 'none';
+      canvas.style.cursor = 'grab';
     }
   } catch (_) { /* */ }
 
@@ -333,6 +420,41 @@ export function createVtkVolumeView(container, options = {}) {
   const boxesByKey = new Map();
 
   const getCanvas = () => container?.querySelector?.('canvas') || null;
+
+  // Re-bind pointer events on the canvas so left-drag pan works reliably.
+  if (interactive) {
+    try {
+      const target = getCanvas() || container;
+      interactor.unbindEvents?.();
+      interactor.bindEvents?.(target);
+    } catch (_) { /* */ }
+  }
+
+  const setInteractive = (enabled) => {
+    try {
+      if (enabled) {
+        if (typeof interactor.enable === 'function') interactor.enable();
+        interactor.setInteractorStyle(createTrackballStyle());
+        const target = getCanvas() || container;
+        if (typeof interactor.bindEvents === 'function' && target) {
+          try {
+            interactor.unbindEvents?.();
+          } catch (_) { /* */ }
+          interactor.bindEvents(target);
+        }
+        const canvas = getCanvas();
+        if (canvas?.style) canvas.style.cursor = 'grab';
+      } else {
+        // Freeze camera while user draws a 3D selection box.
+        if (typeof interactor.disable === 'function') interactor.disable();
+        else if (typeof interactor.unbindEvents === 'function') interactor.unbindEvents();
+        const canvas = getCanvas();
+        if (canvas?.style) canvas.style.cursor = 'crosshair';
+      }
+    } catch (err) {
+      console.warn('VTK setInteractive failed:', err);
+    }
+  };
 
   const removeWireframeBox = (id) => {
     const box = boxesByKey.get(id);
@@ -431,18 +553,31 @@ export function createVtkVolumeView(container, options = {}) {
     // so VTK does not clip rays (and spam console warnings).
     const sp = imageData.getSpacing();
     const voxelStep = Math.min(sp[0], sp[1], sp[2]) || 0.01;
-    const quality = opts.quality === 'high' ? 0.25 : opts.quality === 'medium' ? 0.4 : 0.5;
+    // Slightly coarser still-quality → snappier orbit; LOD coarsens further while dragging.
+    const quality = opts.quality === 'high' ? 0.45 : opts.quality === 'medium' ? 0.65 : 0.85;
     let sd = worldSpace
       ? Math.max(voxelStep * quality, 0.0002)
       : Math.min(sampleDistance, Math.max(voxelStep * quality, 0.05));
     const extentDiag = Math.hypot(sp[0] * dims[0], sp[1] * dims[1], sp[2] * dims[2]);
-    // Keep ray samples modest — huge caps + many volumes blow the WebGL context.
-    const maxSamples = opts.quality === 'high' ? 16000 : 8000;
+    // Ray-sample cap: agility first (VRAM is rarely the browser bottleneck).
+    const maxSamples = opts.quality === 'high' ? 6000 : 4000;
     const minSdForBudget = extentDiag / Math.max(1, maxSamples - 64);
     if (sd < minSdForBudget) sd = minSdForBudget;
     mapper.setSampleDistance(sd);
     if (typeof mapper.setMaximumSamplesPerRay === 'function') {
       mapper.setMaximumSamplesPerRay(maxSamples);
+    }
+    if (typeof mapper.setAutoAdjustSampleDistances === 'function') {
+      mapper.setAutoAdjustSampleDistances(true);
+    }
+    if (typeof mapper.setImageSampleDistance === 'function') {
+      mapper.setImageSampleDistance(opts.quality === 'high' ? 1.5 : 2.25);
+    }
+    if (typeof mapper.setMinimumImageSampleDistance === 'function') {
+      mapper.setMinimumImageSampleDistance(1);
+    }
+    if (typeof mapper.setMaximumImageSampleDistance === 'function') {
+      mapper.setMaximumImageSampleDistance(10);
     }
     mapper.setBlendModeToComposite();
 
@@ -528,8 +663,55 @@ export function createVtkVolumeView(container, options = {}) {
   };
 
   /**
-   * Sync VTK camera to Main_View orbit state (same math as Three updateCameraPosition).
+   * Pan camera in the view plane (screen axes).
+   * dx > 0 moves scene right; dy > 0 moves scene up.
    */
+  const panCameraScreen = (dx, dy) => {
+    if (!dx && !dy) return false;
+    const cam = renderer.getActiveCamera();
+    if (!cam) return false;
+    const pos = cam.getPosition();
+    const fp = cam.getFocalPoint();
+    const up = cam.getViewUp();
+    const fx = fp[0] - pos[0];
+    const fy = fp[1] - pos[1];
+    const fz = fp[2] - pos[2];
+    const flen = Math.hypot(fx, fy, fz) || 1;
+    const fNx = fx / flen;
+    const fNy = fy / flen;
+    const fNz = fz / flen;
+    // right = forward × up
+    let rx = fNy * up[2] - fNz * up[1];
+    let ry = fNz * up[0] - fNx * up[2];
+    let rz = fNx * up[1] - fNy * up[0];
+    const rlen = Math.hypot(rx, ry, rz) || 1;
+    rx /= rlen;
+    ry /= rlen;
+    rz /= rlen;
+    // re-orthogonalize up = right × forward
+    let ux = ry * fNz - rz * fNy;
+    let uy = rz * fNx - rx * fNz;
+    let uz = rx * fNy - ry * fNx;
+    const ulen = Math.hypot(ux, uy, uz) || 1;
+    ux /= ulen;
+    uy /= ulen;
+    uz /= ulen;
+
+    const dist = flen;
+    // Small step so single arrow taps feel smooth (not jumpy)
+    const step = Math.max(dist * 0.0045, 0.0004);
+    const mx = (rx * dx + ux * dy) * step;
+    const my = (ry * dx + uy * dy) * step;
+    const mz = (rz * dx + uz * dy) * step;
+
+    cam.setPosition(pos[0] + mx, pos[1] + my, pos[2] + mz);
+    cam.setFocalPoint(fp[0] + mx, fp[1] + my, fp[2] + mz);
+    cam.setViewUp(ux, uy, uz);
+    if (typeof cam.modified === 'function') cam.modified();
+    renderer.resetCameraClippingRange();
+    return true;
+  };
+
   const syncOrbitCamera = (state, { fov = 75, aspect = 1, near = 0.1, far = 1000 } = {}) => {
     const cam = renderer.getActiveCamera();
     if (!cam || !state) return;
@@ -613,6 +795,7 @@ export function createVtkVolumeView(container, options = {}) {
     resize,
     render,
     syncOrbitCamera,
+    panCameraScreen,
     resetCamera,
     getCanvas,
     setInteractive,

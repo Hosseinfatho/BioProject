@@ -359,8 +359,8 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
   }, [updateCameraPosition, updateChannelLOD, onSelectionChange, renderScene]);
 
   const handleMovement = useCallback(() => {
-    const camera = cameraRef.current;
-    if (!camera) return;
+    const vtk = vtkViewRef.current;
+    if (!vtk?.panCameraScreen) return false;
 
     const keys = keysRef.current;
     const isFast =
@@ -369,57 +369,27 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
       keys.shiftright ||
       keys['shiftleft'] ||
       keys['shiftright'];
-    const speed = isFast ? FAST_MOVE_SPEED : MOVE_SPEED;
-    const state = cameraStateRef.current;
-    let moved = false;
+    const speed = isFast ? 1.75 : 0.55;
 
-    const forward = new THREE.Vector3();
-    const offset = new THREE.Vector3();
+    let dx = 0;
+    let dy = 0;
+    // Arrows / WASD: move whole scene left/right/up/down in the view plane
+    if (keys.arrowleft || keys.a) dx -= speed;
+    if (keys.arrowright || keys.d) dx += speed;
+    if (keys.arrowup || keys.w) dy += speed;
+    if (keys.arrowdown || keys.s) dy -= speed;
 
-    const applyOffset = (vector) => {
-      state.panOffset.x += vector.x;
-      state.panOffset.y += vector.y;
-      state.panOffset.z += vector.z;
-    };
+    if (!dx && !dy) return false;
+    const ok = vtk.panCameraScreen(dx, dy);
+    if (ok) {
+      syncThreeCameraFromVtk();
+      renderScene();
+    }
+    return ok;
+  }, [syncThreeCameraFromVtk, renderScene]);
 
-    if (keys.w || keys.arrowup) {
-      camera.getWorldDirection(forward);
-      applyOffset(forward.multiplyScalar(speed));
-      moved = true;
-    }
-    if (keys.s || keys.arrowdown) {
-      camera.getWorldDirection(forward);
-      applyOffset(forward.multiplyScalar(-speed));
-      moved = true;
-    }
-    if (keys.a || keys.arrowleft) {
-      camera.getWorldDirection(forward);
-      offset.crossVectors(camera.up, forward).normalize().multiplyScalar(speed);
-      applyOffset(offset);
-      moved = true;
-    }
-    if (keys.d || keys.arrowright) {
-      camera.getWorldDirection(forward);
-      offset.crossVectors(camera.up, forward).normalize().multiplyScalar(-speed);
-      applyOffset(offset);
-      moved = true;
-    }
-    if (keys.q) {
-      offset.copy(camera.up).normalize().multiplyScalar(speed);
-      applyOffset(offset);
-      moved = true;
-    }
-    if (keys.e) {
-      offset.copy(camera.up).normalize().multiplyScalar(-speed);
-      applyOffset(offset);
-      moved = true;
-    }
-
-    if (moved) {
-      updateCameraPosition();
-      updateChannelLOD();
-    }
-  }, [updateCameraPosition, updateChannelLOD]);
+  const handleMovementRef = useRef(handleMovement);
+  handleMovementRef.current = handleMovement;
 
   // Convert screen coordinates to normalized device coordinates (-1 to 1)
   const screenToNDC = (x, y, width, height) => {
@@ -1035,6 +1005,8 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
     vtkReadyRef.current = true;
     setVtkReady(true);
     cameraFramedRef.current = false;
+    // Ensure trackball pan/rotate is bound after canvas exists
+    vtkView.setInteractive?.(!selectionModeRef.current);
 
     const scene = new THREE.Scene();
     sceneRef.current = scene;
@@ -1133,8 +1105,42 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
     };
 
     const handleContextMenu = (e) => e.preventDefault();
-    const handleKeyDown = (e) => { keysRef.current[e.key.toLowerCase()] = true; };
-    const handleKeyUp = (e) => { keysRef.current[e.key.toLowerCase()] = false; };
+    // Idle: no continuous volume raycast. Start a short RAF loop only while keys are held.
+    const animate = () => {
+      if (contextLost) return;
+      const keys = keysRef.current;
+      const moving =
+        keys.w || keys.a || keys.s || keys.d ||
+        keys.arrowup || keys.arrowdown || keys.arrowleft || keys.arrowright;
+      if (!moving) {
+        animationRef.current = null;
+        return;
+      }
+      handleMovementRef.current?.();
+      animationRef.current = requestAnimationFrame(animate);
+    };
+    const kickAnimate = () => {
+      if (animationRef.current || contextLost) return;
+      animationRef.current = requestAnimationFrame(animate);
+    };
+    const isNavKey = (key) => {
+      const k = String(key || '').toLowerCase();
+      return (
+        k === 'arrowup' || k === 'arrowdown' || k === 'arrowleft' || k === 'arrowright' ||
+        k === 'w' || k === 'a' || k === 's' || k === 'd'
+      );
+    };
+    const handleKeyDown = (e) => {
+      if (!isNavKey(e.key)) return;
+      // Keep page from scrolling when moving the volume with arrows
+      e.preventDefault();
+      keysRef.current[e.key.toLowerCase()] = true;
+      kickAnimate();
+    };
+    const handleKeyUp = (e) => {
+      if (!isNavKey(e.key)) return;
+      keysRef.current[e.key.toLowerCase()] = false;
+    };
 
     canvas.addEventListener('mousedown', handleMouseDown, true);
     window.addEventListener('mouseup', handleMouseUp, true);
@@ -1143,13 +1149,6 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
     canvas.addEventListener('contextmenu', handleContextMenu);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
-
-    const animate = () => {
-      if (contextLost) return;
-      renderScene();
-      animationRef.current = requestAnimationFrame(animate);
-    };
-    animationRef.current = requestAnimationFrame(animate);
 
     const handleResize = () => {
       const r = container.getBoundingClientRect();
@@ -1558,6 +1557,25 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
       >
         ↺ Reset View
       </button>
+      {!selectionMode && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '52px',
+            right: '250px',
+            zIndex: 1000,
+            padding: '6px 10px',
+            backgroundColor: 'rgba(40,40,40,0.65)',
+            color: 'rgba(255,255,255,0.85)',
+            borderRadius: '4px',
+            fontSize: '11px',
+            pointerEvents: 'none',
+            backdropFilter: 'blur(6px)'
+          }}
+        >
+          Drag: move · Arrows/WASD: pan · Shift+drag: rotate · Wheel: zoom
+        </div>
+      )}
 
       {/* Selection Box Help Tooltip - shown when selection mode is active */}
       {selectionMode && !isSelecting && !cuboidDimensions && (
