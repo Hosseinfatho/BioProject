@@ -3,44 +3,65 @@ import channelNamesData from '../channel_names.json';
 import { CONFIG } from '../config';
 import { useDataResolution } from '../dataResolution.jsx';
 
+/** ColorBrewer Set1 (8) — top channel colors */
+const COLOR_PALETTE = [
+  '#e41a1c',
+  '#377eb8',
+  '#4daf4a',
+  '#984ea3',
+  '#ff7f00',
+  '#ffff33',
+  '#a65628',
+  '#f781bf'
+];
+
+/** Stable color per marker (first 8 get the palette above; extras wrap) */
+const MARKER_COLOR_ORDER = [
+  'MART1',
+  'MX1',
+  'IRF1',
+  'CD11c',
+  'CD8a',
+  'CD4',
+  'CD15',
+  'CD11b',
+  'CD103',
+  'CD20',
+  'CD31'
+];
+
+const MARKER_COLORS = Object.fromEntries(
+  MARKER_COLOR_ORDER.map((name, index) => [name, COLOR_PALETTE[index % COLOR_PALETTE.length]])
+);
+
+const paletteForMarkers = (markers) =>
+  markers.map((name, index) => MARKER_COLORS[name] || COLOR_PALETTE[index % COLOR_PALETTE.length]);
+
 // Microenvironments and channels aligned with 60_model.py / config (ROI positions)
 const REGION_DEFINITIONS = [
   {
     id: 'inflammation',
     title: 'Inflammation',
     markers: ['MART1', 'MX1', 'IRF1', 'CD11c'],
-    palette: [
-      [27, 158, 119],
-      [217, 95, 2],
-      [117, 112, 179],
-      [231, 41, 138]
-    ]
+    get palette() {
+      return paletteForMarkers(this.markers);
+    }
   },
   {
     id: 'immune-cells',
     title: 'Immune cells',
     markers: ['CD8a', 'CD4', 'CD15', 'CD11c', 'CD11b', 'CD103', 'CD20'],
-    palette: [
-      [166, 206, 227],
-      [31, 120, 180],
-      [51, 160, 44],
-      [251, 154, 153],
-      [255, 127, 0],
-      [127, 127, 127],
-      [188, 189, 34]
-    ]
+    get palette() {
+      return paletteForMarkers(this.markers);
+    }
   },
   {
     id: 'b-cell',
     title: 'B-cell',
     markers: ['CD31', 'CD20', 'CD11b', 'CD11c', 'CD4'],
-    palette: [
-      [228, 26, 28],
-      [55, 126, 184],
-      [77, 175, 74],
-      [152, 78, 163],
-      [255, 255, 153]
-    ]
+    get palette() {
+      return paletteForMarkers(this.markers);
+    }
   }
 ];
 
@@ -165,14 +186,15 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
     const topMarkers = region.markers.slice(0, 4);
     // Follow global Low/High Res toggle
     const channelBasePath = channelDataDir;
+    const regionPalette = paletteForMarkers(region.markers);
 
     const channelConfigs = topMarkers
       .map((marker, index) => {
         const channelIndex = resolveChannelIndex(marker);
-        const paletteColor = region.palette[index] || region.palette[region.palette.length - 1];
+        const paletteColor = MARKER_COLORS[marker] || regionPalette[index] || COLOR_PALETTE[index % COLOR_PALETTE.length];
         const colorHex = Array.isArray(paletteColor)
           ? rgbToHex(paletteColor[0], paletteColor[1], paletteColor[2])
-          : '#ffffff';
+          : paletteColor;
 
         if (channelIndex === null || channelIndex === undefined) {
           return null;
@@ -202,7 +224,7 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
       })),
       channels: channelConfigs,
       markers: region.markers,
-      palette: region.palette
+      palette: regionPalette
     };
   };
 
@@ -288,7 +310,7 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
       style={{
         height: '100%',
         width: '100%',
-        backgroundColor: 'var(--panel-bg, #000000)',
+        backgroundColor: 'transparent',
         border: '1px solid var(--border-color, #444)',
         padding: '1px',
         overflow: 'hidden',
@@ -307,7 +329,9 @@ const Region_Selection = ({ onToggleRegion, selectedRegions = [] }) => {
           backgroundColor: 'var(--header-bg, #333333)',
           padding: '8px 12px',
           flexShrink: 0,
-          borderBottom: '1px solid var(--border-color, #444)'
+          borderBottom: '1px solid var(--border-color, #444)',
+          backdropFilter: 'blur(4px)',
+          WebkitBackdropFilter: 'blur(4px)'
         }}
       >
         <h3

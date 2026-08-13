@@ -1286,7 +1286,7 @@ const Graph_Pannel = ({ selectedRegionData, selectedRegionsData, channels = [], 
       style={{
         height: '100%',
         width: '100%',
-        backgroundColor: 'var(--panel-bg, #000000)',
+        backgroundColor: 'transparent',
         border: '1px solid var(--border-color, #444)',
         padding: '1px',
         display: 'flex',
@@ -1305,7 +1305,9 @@ const Graph_Pannel = ({ selectedRegionData, selectedRegionsData, channels = [], 
         backgroundColor: 'var(--header-bg, #333333)',
         borderBottom: '1px solid var(--border-color, rgba(255, 255, 255, 0.1))',
         flexShrink: 0,
-        zIndex: 10
+        zIndex: 10,
+        backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)'
       }}>
         <h3 style={{
           margin: 0,

@@ -4,8 +4,7 @@ import graphicalAbstract from '../../graphical_abstract.jpg';
 
 const Title = ({
   softwareName = "Software Name (title)",
-  onLoadExample,
-  onSaveExample
+  onOpenExampleLibrary
 }) => {
   const [showAbout, setShowAbout] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -58,14 +57,16 @@ const Title = ({
     <>
       <div style={{
         width: '100%',
-        backgroundColor: colors.headerBg,
+        backgroundColor: 'var(--header-bg)',
         color: colors.text,
         display: 'flex',
         alignItems: 'center',
         gap: '10px',
         padding: '6px 12px',
         borderBottom: `1px solid ${colors.border}`,
-        boxSizing: 'border-box'
+        boxSizing: 'border-box',
+        backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)'
       }}>
         {/* Project name — leftmost, font size adapts to available width */}
         <div
@@ -103,31 +104,11 @@ const Title = ({
           gap: '10px',
           flexShrink: 0
         }}>
-          {typeof onSaveExample === 'function' && (
+          {typeof onOpenExampleLibrary === 'function' && (
             <button
               type="button"
-              onClick={onSaveExample}
-              title="Save current channels, camera, filters and boxes as Example scene JSON"
-              style={{
-                padding: '5px 10px',
-                backgroundColor: 'transparent',
-                color: colors.text,
-                border: `1px solid ${colors.borderStrong}`,
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '12px',
-                fontWeight: 700,
-                lineHeight: 1.2
-              }}
-            >
-              Save Scene
-            </button>
-          )}
-          {typeof onLoadExample === 'function' && (
-            <button
-              type="button"
-              onClick={onLoadExample}
-              title="Load the Example demo scene (camera, boxes, filters, stats)"
+              onClick={onOpenExampleLibrary}
+              title="Save, load, or delete named example scenes"
               style={{
                 padding: '5px 12px',
                 backgroundColor: '#2e7d32',
@@ -152,18 +133,25 @@ const Title = ({
             type="button"
             role="switch"
             aria-checked={!isDark}
-            onClick={toggleTheme}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              toggleTheme();
+            }}
             title={isDark ? 'Switch to day mode' : 'Switch to night mode'}
             aria-label={isDark ? 'Day mode off, switch to day' : 'Day mode on, switch to night'}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '7px',
-              padding: 0,
+              padding: '4px 6px',
               border: 'none',
               background: 'transparent',
               cursor: 'pointer',
-              fontFamily: 'inherit'
+              fontFamily: 'inherit',
+              position: 'relative',
+              zIndex: 20,
+              pointerEvents: 'auto'
             }}
           >
             <span

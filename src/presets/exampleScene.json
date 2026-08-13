@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "enabled": true,
-  "name": "Example scene",
+  "enabled": false,
+  "name": "Example scene (disabled — use Examples library in the app)",
   "resolution": "very",
   "channels": [
     {

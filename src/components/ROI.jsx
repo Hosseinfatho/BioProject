@@ -31,6 +31,7 @@ function ROI({ onPositionsChange, onRoiBoxChange, highlightedRoiIndex = null, on
   const [showInVisualization, setShowInVisualization] = useState(false);
   const [positions, setPositions] = useState([]);
   const [filteredPositions, setFilteredPositions] = useState([]);
+  const [volumeShape, setVolumeShape] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const chartContainerRef = useRef(null);
@@ -40,6 +41,21 @@ function ROI({ onPositionsChange, onRoiBoxChange, highlightedRoiIndex = null, on
   const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
   const positionsBase = CONFIG.POSITIONS_BASE || 'VIS2026/output';
   const datasetId = 1; // fixed, no dataset selector
+
+  const publishRoiBoxes = useCallback((filtered, shape, show) => {
+    if (show && filtered?.length > 0 && shape) {
+      const boxes = filtered.map((pos, idx) => ({
+        center: { x: pos.x, y: pos.y, z: pos.z },
+        size: ROI_BOX_SIZE,
+        volumeShape: shape,
+        roiId: pos.id,
+        roiIndex: idx + 1
+      }));
+      onRoiBoxChange?.(boxes);
+    } else {
+      onRoiBoxChange?.(null);
+    }
+  }, [onRoiBoxChange]);
 
   const handleShow = useCallback(async () => {
     if (!enabled) return;
@@ -59,38 +75,40 @@ function ROI({ onPositionsChange, onRoiBoxChange, highlightedRoiIndex = null, on
       const data = await res.json();
       const allPositions = data.positions || [];
       setPositions(allPositions);
+      setVolumeShape(data.volume_shape || null);
 
       const pct = Math.max(0, Math.min(100, Number(percent) || 0));
       const count = Math.max(1, Math.ceil(allPositions.length * (pct / 100)));
       const filtered = allPositions.slice(0, count);
       setFilteredPositions(filtered);
       onPositionsChange?.(filtered);
-      if (showInVisualization && filtered.length > 0 && data.volume_shape) {
-        const boxes = filtered.map((pos, idx) => ({
-          center: { x: pos.x, y: pos.y, z: pos.z },
-          size: ROI_BOX_SIZE,
-          volumeShape: data.volume_shape,
-          roiId: pos.id,
-          roiIndex: idx + 1
-        }));
-        onRoiBoxChange?.(boxes);
-      } else {
-        onRoiBoxChange?.(null);
-      }
+      publishRoiBoxes(filtered, data.volume_shape, showInVisualization);
     } catch (err) {
       setError(err.message || 'Could not load positions.');
       setPositions([]);
       setFilteredPositions([]);
+      setVolumeShape(null);
       onPositionsChange?.([]);
       onRoiBoxChange?.(null);
     } finally {
       setLoading(false);
     }
-  }, [enabled, microenvironment, percent, showInVisualization, baseUrl, positionsBase, onPositionsChange, onRoiBoxChange]);
+  }, [
+    enabled,
+    microenvironment,
+    percent,
+    showInVisualization,
+    baseUrl,
+    positionsBase,
+    onPositionsChange,
+    onRoiBoxChange,
+    publishRoiBoxes
+  ]);
 
+  // Toggle Visualization on/off without requiring another Show click
   useEffect(() => {
-    if (!showInVisualization) onRoiBoxChange?.(null);
-  }, [showInVisualization, onRoiBoxChange]);
+    publishRoiBoxes(filteredPositions, volumeShape, showInVisualization);
+  }, [showInVisualization, filteredPositions, volumeShape, publishRoiBoxes]);
 
   const handlePercentChange = (e) => {
     const v = e.target.value;
@@ -263,7 +281,7 @@ function ROI({ onPositionsChange, onRoiBoxChange, highlightedRoiIndex = null, on
       style={{
         height: '100%',
         width: '100%',
-        backgroundColor: 'var(--panel-bg, #000000)',
+        backgroundColor: 'transparent',
         border: '1px solid var(--border-color, #444)',
         padding: '1px',
         display: 'flex',
@@ -274,7 +292,16 @@ function ROI({ onPositionsChange, onRoiBoxChange, highlightedRoiIndex = null, on
       }}
     >
       {/* All controls in one line */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'nowrap', backgroundColor: 'var(--header-bg, #333333)', padding: '8px 12px' }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        flexWrap: 'nowrap',
+        backgroundColor: 'var(--header-bg, #333333)',
+        padding: '8px 12px',
+        backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)'
+      }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-color, #fff)', fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
           <input
             type="checkbox"

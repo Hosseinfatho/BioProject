@@ -1,12 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
 import * as THREE from 'three';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
-import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass';
-import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader';
-import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass';
 import { loadChannelData } from '../hooks/useChannelData';
 import { useTheme } from '../theme.jsx';
+import { createVtkVolumeView } from '../vtk/vtkVolumeView';
 
 const CAMERA_INITIAL_STATE = {
   rotation: { x: 0, y: Math.PI },
@@ -23,46 +19,17 @@ const cloneCameraState = (state = CAMERA_INITIAL_STATE) => ({
 const MOVE_SPEED = 0.05;
 const FAST_MOVE_SPEED = 0.15;
 const LOD_COOLDOWN_MS = 200;
-/**
- * Max rendered voxels per channel (after threshold).
- * 200M: allows Very High (stride 2×2 → ~728M volume) to keep denser sampling.
- */
-const MAX_POINTS_PER_CHANNEL = 200000000;
-const OPACITY_FLOOR = 0.35;
-const OPACITY_BOOST = 1.3;
-const EDGE_FEATHER = 0.99;
-/** 0 = sharp grid (best resolution look). */
-const JITTER_SCALE = 0;
-const AMBIENT_COLOR = new THREE.Color(0.9, 0.9, 0.95);
-const DEFAULT_THRESHOLD_MIN_FRACTION = 0.03;
-const DEFAULT_THRESHOLD_MAX_FRACTION = 0.9;
+/** Soft total GPU budget for ALL Main volume textures combined (prevents CONTEXT_LOST). */
+const MAIN_VTK_TOTAL_VOXEL_BUDGET = 220_000_000;
+const MAIN_VTK_MIN_VOXELS_PER_CHANNEL = 10_000_000;
 
-// Shared voxel fragment shader (day mode boosts saturation for contrast on white)
-const VOXEL_FRAGMENT_SHADER = `
-  uniform vec3 color;
-  uniform float edgeFeather;
-  uniform float lightMode;
-  varying float vOpacity;
-  varying vec3 vLocalPos;
-  void main() {
-    float base = clamp(vOpacity, 0.0, 1.0);
-    float edge = max(max(abs(vLocalPos.x), abs(vLocalPos.y)), abs(vLocalPos.z));
-    float edgeFade = smoothstep(0.5 - edgeFeather, 0.5, edge);
-    base *= (1.0 - edgeFade);
-    if (base <= 0.01) discard;
-    vec3 finalColor = pow(color, vec3(0.55));
-    float luma = dot(finalColor, vec3(0.299, 0.587, 0.114));
-    if (lightMode > 0.5) {
-      vec3 saturated = clamp(luma + (finalColor - luma) * 2.1, 0.0, 1.0);
-      vec3 dayColor = pow(saturated, vec3(1.15));
-      float a = clamp(max(base * 1.15, 0.55), 0.55, 1.0);
-      gl_FragColor = vec4(dayColor, a);
-    } else {
-      vec3 saturated = clamp(luma + (finalColor - luma) * 1.75, 0.0, 1.0);
-      gl_FragColor = vec4(saturated * base, base);
-    }
-  }
-`;
+const getMainVtkMaxVoxels = (channelCount) => {
+  const n = Math.max(1, Number(channelCount) || 1);
+  return Math.max(
+    MAIN_VTK_MIN_VOXELS_PER_CHANNEL,
+    Math.floor(MAIN_VTK_TOTAL_VOXEL_BUDGET / n)
+  );
+};
 
 // Color map for selection boxes
 const BOX_COLOR_MAP = [
@@ -139,9 +106,16 @@ const getChannelCacheKey = (config) => {
 // Position space in ROI JSON uses grid index × 16; same as 60_model.py coord_scale
 const ROI_POSITION_SCALE = 16;
 
-const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionChange, initialSelectionBounds, selectedRegionsData = [], roiBoxes = null, onRoiHover = null }, ref) => {
+const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionChange, initialSelectionBounds, selectedRegionsData = [], roiBoxes = null, onRoiHover = null, highlightedRoiIndex = null }, ref) => {
   const { colors, theme } = useTheme();
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
   const mountRef = useRef(null);
+  const vtkMountRef = useRef(null);
+  const vtkViewRef = useRef(null);
+  const vtkReadyRef = useRef(false);
+  const cameraFramedRef = useRef(false);
+  const [vtkReady, setVtkReady] = useState(false);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
   const rendererRef = useRef(null);
@@ -152,8 +126,12 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
 
   const pointCloudsRef = useRef([]);
   const loadedChannelsRef = useRef(new Map());
+  const lastGpuBudgetCountRef = useRef(0);
   const channelDataCacheRef = useRef(new Map());
   const channelConfigsRef = useRef(new Map());
+  const channelsPropRef = useRef(channels);
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  const handleSelectionCompleteRef = useRef(null);
   const lodStateRef = useRef({ lastSampling: null, lastUpdate: 0 });
   const keysRef = useRef({});
   const selectionModeRef = useRef(false);
@@ -177,9 +155,19 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
   const [cuboidCenter, setCuboidCenter] = useState(null);
   const [cuboidSize, setCuboidSize] = useState(null);
 
+  useEffect(() => {
+    channelsPropRef.current = channels || [];
+  }, [channels]);
+
+  useEffect(() => {
+    onSelectionChangeRef.current = onSelectionChange;
+  }, [onSelectionChange]);
+
   // Sync refs with state
   useEffect(() => {
     selectionModeRef.current = selectionMode;
+    // Freeze VTK trackball while drawing a selection so mouse drag selects, not rotates.
+    vtkViewRef.current?.setInteractive?.(!selectionMode);
   }, [selectionMode]);
 
   useEffect(() => {
@@ -197,156 +185,68 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
   // Distance-based thinning disabled so 1–2 channels stay at highest quality.
   const getDesiredSampling = useCallback((_distance = 3) => 1, []);
 
-  const createChannelVisualization = useCallback((channelData, channelConfig, samplingOverride) => {
-    if (!channelData || !channelConfig) return null;
-
-    const { data, metadata } = channelData;
-    const { color, thresholdMin, thresholdMax } = channelConfig;
-    const [zSize, ySize, xSize] = metadata.shape || [];
-    if (!zSize || !ySize || !xSize) return null;
-
-    const [dataMin = 0, dataMax = 65535] = metadata.dataRange || [];
-    const rangeSpan = Math.max(1, dataMax - dataMin);
-    const autoMin = Math.round(dataMin + rangeSpan * DEFAULT_THRESHOLD_MIN_FRACTION);
-    const autoMax = Math.round(dataMin + rangeSpan * DEFAULT_THRESHOLD_MAX_FRACTION);
-
-    let minThreshold = thresholdMin ?? autoMin;
-    let maxThreshold = thresholdMax ?? autoMax;
-    if (minThreshold > maxThreshold) {
-      [minThreshold, maxThreshold] = [maxThreshold, minThreshold];
-    }
-    minThreshold = clamp(minThreshold, dataMin, dataMax);
-    maxThreshold = clamp(maxThreshold, dataMin, dataMax);
-
-    const hexColor = color.replace('#', '');
-    const r = parseInt(hexColor.substring(0, 2), 16) / 255;
-    const g = parseInt(hexColor.substring(2, 4), 16) / 255;
-    const b = parseInt(hexColor.substring(4, 6), 16) / 255;
-
-    const points = [];
-    const opacities = [];
-    const baseOpacityFloor = 0.35;
-
-    const maxDim = Math.max(zSize, ySize, xSize);
-    const scaleX = xSize / maxDim;
-    const scaleY = ySize / maxDim;
-    const scaleZ = (zSize / maxDim) / 4;
-
-    const totalVoxels = zSize * ySize * xSize;
-    let sampling = 1;
-
-    // Only thin if we would truly exceed the GPU budget (rare with 500M cap)
-    const estimatedPassing = totalVoxels * 0.08;
-    if (estimatedPassing > MAX_POINTS_PER_CHANNEL) {
-      const ratio = estimatedPassing / MAX_POINTS_PER_CHANNEL;
-      sampling = Math.max(2, Math.ceil(Math.cbrt(Math.max(ratio, 1))));
-    }
-    // samplingOverride ignored — always keep highest resolution under budget
-
-    console.log(`Channel visualization: shape=${metadata.shape}, sampling=${sampling}, totalVoxels=${totalVoxels}, maxPoints=${MAX_POINTS_PER_CHANNEL}`);
-    console.log(`Channel ${channelConfig.channelIndex}: Data range [${dataMin}, ${dataMax}], Threshold range [${minThreshold}, ${maxThreshold}]`);
-
-    const stepX = (2 / xSize) * scaleX * sampling;
-    const stepY = (2 / ySize) * scaleY * sampling;
-    const stepZ = (2 / zSize) * scaleZ * sampling;
-
-    let pointCount = 0;
-    const thresholdSpan = Math.max(1, maxThreshold - minThreshold);
-    for (let z = 0; z < zSize; z += sampling) {
-      for (let y = 0; y < ySize; y += sampling) {
-        for (let x = 0; x < xSize; x += sampling) {
-          const idx = z * ySize * xSize + y * xSize + x;
-          const normalized = data[idx];
-          const value = (normalized / 255) * (dataMax - dataMin) + dataMin;
-
-          if (value >= minThreshold && value <= maxThreshold) {
-            if (pointCount >= MAX_POINTS_PER_CHANNEL) {
-              console.warn(`Channel ${channelConfig.channelIndex}: Reached max points limit (${MAX_POINTS_PER_CHANNEL})`);
-              break;
-            }
-            pointCount += 1;
-
-            const nx = ((x / xSize) * 2 - 1) * scaleX;
-            const ny = ((y / ySize) * 2 - 1) * scaleY;
-            const nz = ((z / zSize) * 2 - 1) * scaleZ;
-
-            const jitterX = (Math.random() - 0.5) * stepX * JITTER_SCALE;
-            const jitterY = (Math.random() - 0.5) * stepY * JITTER_SCALE;
-            const jitterZ = (Math.random() - 0.5) * stepZ * JITTER_SCALE;
-            points.push(nx + jitterX, ny + jitterY, nz + jitterZ);
-
-            const normalizedOpacity = (value - minThreshold) / thresholdSpan;
-            const scaledOpacity = clamp(normalizedOpacity, 0, 1);
-            const finalOpacity = baseOpacityFloor + (1 - baseOpacityFloor) * scaledOpacity * OPACITY_BOOST;
-            opacities.push(clamp(finalOpacity, baseOpacityFloor, 1));
-          }
-        }
-      }
-    }
-
-    console.log(`Channel ${channelConfig.channelIndex}: Created ${pointCount} voxels with sampling=${sampling}`);
-
-    const numPoints = points.length / 3;
-    if (numPoints === 0) {
-      console.warn(`Channel ${channelConfig.channelIndex}: No voxels within threshold range`);
-      return null;
-    }
-
-    const baseGeometry = new THREE.BoxGeometry(stepX, stepY, stepZ);
-    const geometry = new THREE.InstancedBufferGeometry().copy(baseGeometry);
-    baseGeometry.dispose();
-
-    geometry.instanceCount = numPoints;
-    geometry.setAttribute('instanceOffset', new THREE.InstancedBufferAttribute(new Float32Array(points), 3));
-    geometry.setAttribute('instanceOpacity', new THREE.InstancedBufferAttribute(new Float32Array(opacities), 1));
-
-    // Additive blending disappears on white backgrounds — use normal blending in day mode
-    const useAdditive = theme !== 'light';
-    const voxelMaterial = new THREE.ShaderMaterial({
-      uniforms: {
-        color: { value: new THREE.Color(r, g, b) },
-        edgeFeather: { value: EDGE_FEATHER },
-        lightMode: { value: useAdditive ? 0.0 : 1.0 }
-      },
-      vertexShader: `
-        attribute vec3 instanceOffset;
-        attribute float instanceOpacity;
-        varying float vOpacity;
-        varying vec3 vLocalPos;
-        void main() {
-          vOpacity = instanceOpacity;
-          vec3 transformed = position + instanceOffset;
-          vLocalPos = position;
-          vec4 mvPosition = modelViewMatrix * vec4(transformed, 1.0);
-          gl_Position = projectionMatrix * mvPosition;
-        }
-      `,
-      fragmentShader: VOXEL_FRAGMENT_SHADER,
-      transparent: true,
-      depthWrite: !useAdditive,
-      depthTest: !useAdditive,
-      blending: useAdditive ? THREE.AdditiveBlending : THREE.NormalBlending
+  const upsertVtkChannel = useCallback((cacheKey, channelData, channelConfig, channelCount = 1) => {
+    const vtk = vtkViewRef.current;
+    if (!vtk || !channelData || !channelConfig) return false;
+    const maxVoxels = getMainVtkMaxVoxels(channelCount);
+    const many = channelCount >= 4;
+    const ok = vtk.upsertChannel(cacheKey, channelData, channelConfig, {
+      lightMode: themeRef.current === 'light',
+      quality: many ? 'medium' : 'high',
+      maxVoxels
     });
-
-    const mesh = new THREE.Mesh(geometry, voxelMaterial);
-    mesh.frustumCulled = false;
-    mesh.userData = { channelIndex: channelConfig.channelIndex, sampling, theme };
-
-    return { mesh, sampling };
-  }, [theme]);
-
-  const renderScene = useCallback(() => {
-    const scene = sceneRef.current;
-    const camera = cameraRef.current;
-    if (!scene || !camera) return;
-    if (composerRef.current) {
-      composerRef.current.render();
-    } else if (rendererRef.current) {
-      rendererRef.current.render(scene, camera);
+    if (ok) {
+      vtk.setChannelVisible(cacheKey, channelConfig.visible !== false);
+      if (!cameraFramedRef.current) {
+        vtk.resetCamera();
+        cameraFramedRef.current = true;
+        console.log('Main_View VTK: resetCamera (Local-style framing)');
+      }
+      vtk.render();
     }
+    return ok;
   }, []);
 
-  const updateCameraPosition = useCallback(() => {
+  const renderScene = useCallback(() => {
+    const vtk = vtkViewRef.current;
+    if (!vtk) return;
+    const canvas = vtk.getCanvas?.();
+    if (canvas?.isContextLost?.()) return;
+    try {
+      vtk.render();
+    } catch (_) { /* context may be lost mid-frame */ }
+  }, []);
+
+  const syncThreeCameraFromVtk = useCallback(() => {
+    const vtk = vtkViewRef.current;
+    const camera = cameraRef.current;
+    if (!vtk || !camera) return;
+    try {
+      const vcam = vtk.getRenderer().getActiveCamera();
+      const pos = vcam.getPosition();
+      const fp = vcam.getFocalPoint();
+      const up = vcam.getViewUp();
+      const canvas = vtk.getCanvas?.();
+      if (canvas) {
+        const w = Math.max(1, canvas.clientWidth || canvas.width || 1);
+        const h = Math.max(1, canvas.clientHeight || canvas.height || 1);
+        camera.aspect = w / h;
+      }
+      camera.position.set(pos[0], pos[1], pos[2]);
+      camera.up.set(up[0], up[1], up[2]);
+      camera.lookAt(fp[0], fp[1], fp[2]);
+      camera.fov = vcam.getViewAngle?.() || camera.fov;
+      const cr = vcam.getClippingRange?.();
+      if (cr && cr.length >= 2) {
+        camera.near = Math.max(0.001, cr[0]);
+        camera.far = Math.max(camera.near + 1, cr[1]);
+      }
+      camera.updateProjectionMatrix();
+      camera.updateMatrixWorld(true);
+    } catch (_) { /* */ }
+  }, []);
+
+    const updateCameraPosition = useCallback(() => {
     const camera = cameraRef.current;
     if (!camera) return;
 
@@ -364,68 +264,13 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
     camera.position.x = lookAtPoint.x + radius * Math.sin(theta) * Math.cos(phi);
     camera.position.y = lookAtPoint.y + radius * Math.sin(phi);
     camera.position.z = lookAtPoint.z + radius * Math.cos(theta) * Math.cos(phi);
-    camera.up.set(0, -1, 0);
+    camera.up.set(0, 1, 0);
     camera.lookAt(lookAtPoint);
   }, []);
 
-  const updateChannelLOD = useCallback(() => {
-    const scene = sceneRef.current;
-    if (!scene) return;
-    const state = cameraStateRef.current;
-    if (!state) return;
+  const updateChannelLOD = useCallback(() => {}, []);
 
-    const desiredSampling = getDesiredSampling(state.distance || 3);
-    const now = Date.now();
-    const lodState = lodStateRef.current;
-
-    if (now - lodState.lastUpdate < LOD_COOLDOWN_MS) return;
-    lodState.lastUpdate = now;
-
-    const loadedChannels = loadedChannelsRef.current;
-    loadedChannels.forEach((entry, key) => {
-      if (!entry) return;
-      if (entry.sampling === desiredSampling || entry.lastRequestedSampling === desiredSampling) return;
-
-      const channelData = channelDataCacheRef.current.get(key);
-      const channelConfig = channelConfigsRef.current.get(key);
-      if (!channelData || !channelConfig) return;
-
-      const previousMesh = entry.mesh;
-      const wasVisible = previousMesh ? scene.children.includes(previousMesh) : false;
-
-      const result = createChannelVisualization(channelData, channelConfig, desiredSampling);
-      entry.lastRequestedSampling = desiredSampling;
-
-      if (!result) {
-        if (wasVisible && previousMesh) scene.remove(previousMesh);
-        disposeMesh(previousMesh);
-        removeMeshFromCollection(previousMesh, pointCloudsRef.current);
-        loadedChannels.delete(key);
-        return;
-      }
-
-      const { mesh, sampling } = result;
-
-      if (previousMesh) {
-        if (scene.children.includes(previousMesh)) scene.remove(previousMesh);
-        disposeMesh(previousMesh);
-        removeMeshFromCollection(previousMesh, pointCloudsRef.current);
-      }
-
-      pointCloudsRef.current.push(mesh);
-      loadedChannels.set(key, { mesh, sampling, lastRequestedSampling: desiredSampling });
-
-      if (wasVisible && channelConfig.visible !== false) {
-        scene.add(mesh);
-      }
-    });
-
-    lodState.lastSampling = desiredSampling;
-    renderScene();
-  }, [createChannelVisualization, getDesiredSampling, renderScene]);
-
-  // Reset camera to initial state (same as first load) and clear all boxes
-  const resetCameraView = useCallback(() => {
+    const resetCameraView = useCallback(() => {
     // Deep-clone so mutated rotation/panOffset never corrupt CAMERA_INITIAL_STATE
     cameraStateRef.current = cloneCameraState();
 
@@ -461,29 +306,24 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
           console.error('Main_View: Error removing temporary wireframe:', err);
         }
       }
-      // Remove ROI wireframes and labels
+      // Remove ROI / selection wireframes from VTK
+      const vtkClear = vtkViewRef.current;
       roiWireframesRef.current.forEach((entry) => {
-        const w = entry.wireframe || entry;
-        const s = entry.sprite;
-        if (w && scene.children.includes(w)) {
-          try {
-            scene.remove(w);
-            if (w.geometry) w.geometry.dispose();
-            if (w.material) w.material.dispose();
-          } catch (err) {
-            console.error('Main_View: Error removing ROI wireframe:', err);
-          }
-        }
-        if (s && scene.children.includes(s)) {
-          try {
-            scene.remove(s);
-            if (s.material?.map) s.material.map.dispose();
-            if (s.material) s.material.dispose();
-          } catch (err) {
-            console.error('Main_View: Error removing ROI label:', err);
-          }
+        const id = typeof entry === 'string' ? entry : entry?.vtkId;
+        if (id && vtkClear) {
+          try { vtkClear.removeWireframeBox(id); } catch (_) { /* */ }
         }
       });
+      cuboidWireframesRef.current.forEach((entry) => {
+        const id = entry?.userData?.vtkId;
+        if (id && vtkClear) {
+          try { vtkClear.removeWireframeBox(id); } catch (_) { /* */ }
+        }
+      });
+      if (cuboidWireframeRef.current?.userData?.vtkId && vtkClear) {
+        try { vtkClear.removeWireframeBox(cuboidWireframeRef.current.userData.vtkId); } catch (_) { /* */ }
+      }
+      vtkClear?.render?.();
     }
     
     // Clear all references
@@ -591,11 +431,15 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
 
   // Get 3D world bounds from screen selection box (for XY plane)
   const getWorldBoundsFromSelection = (startX, startY, endX, endY, zDepth = 0) => {
-    if (!cameraRef.current || !rendererRef.current) return null;
+    syncThreeCameraFromVtk();
+    if (!cameraRef.current) return null;
+    const canvas = vtkViewRef.current?.getCanvas?.() || rendererRef.current?.domElement;
+    if (!canvas) return null;
 
-    const rect = rendererRef.current.domElement.getBoundingClientRect();
+    const rect = canvas.getBoundingClientRect();
     const width = rect.width;
     const height = rect.height;
+    if (width < 2 || height < 2) return null;
 
     // Convert to NDC
     const startNDC = screenToNDC(startX - rect.left, startY - rect.top, width, height);
@@ -605,11 +449,9 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
     const raycaster = new THREE.Raycaster();
     const camera = cameraRef.current;
 
-    // Get corners of selection box in world space
-    // Use a plane at z=zDepth to intersect
-    const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -zDepth);
+    // Intersect with z=0 plane (volume mid-slab); depth sets Z thickness.
+    const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
 
-    // Calculate world positions for corners
     const corners = [
       new THREE.Vector2(startNDC.x, startNDC.y),
       new THREE.Vector2(endNDC.x, startNDC.y),
@@ -618,23 +460,25 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
     ];
 
     const worldPositions = [];
-    corners.forEach(ndc => {
+    corners.forEach((ndc) => {
       raycaster.setFromCamera(ndc, camera);
       const intersection = new THREE.Vector3();
-      raycaster.ray.intersectPlane(plane, intersection);
-      worldPositions.push(intersection);
+      const hit = raycaster.ray.intersectPlane(plane, intersection);
+      if (hit) worldPositions.push(intersection.clone());
     });
 
-    if (worldPositions.length === 0) return null;
+    if (worldPositions.length < 2) return null;
 
-    // Calculate bounding box
-    const minX = Math.min(...worldPositions.map(p => p.x));
-    const maxX = Math.max(...worldPositions.map(p => p.x));
-    const minY = Math.min(...worldPositions.map(p => p.y));
-    const maxY = Math.max(...worldPositions.map(p => p.y));
+    const minX = Math.min(...worldPositions.map((p) => p.x));
+    const maxX = Math.max(...worldPositions.map((p) => p.x));
+    const minY = Math.min(...worldPositions.map((p) => p.y));
+    const maxY = Math.max(...worldPositions.map((p) => p.y));
+    if (!(Number.isFinite(minX) && Number.isFinite(maxX) && Number.isFinite(minY) && Number.isFinite(maxY))) {
+      return null;
+    }
+    if (Math.abs(maxX - minX) < 1e-6 && Math.abs(maxY - minY) < 1e-6) return null;
 
-    // Calculate Z bounds based on depth
-    const zHalfDepth = Math.abs(zDepth) / 2;
+    const zHalfDepth = Math.max(0.005, Math.abs(zDepth) / 2);
     const minZ = -zHalfDepth;
     const maxZ = zHalfDepth;
 
@@ -642,7 +486,7 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
       min: new THREE.Vector3(minX, minY, minZ),
       max: new THREE.Vector3(maxX, maxY, maxZ),
       center: new THREE.Vector3((minX + maxX) / 2, (minY + maxY) / 2, 0),
-      size: new THREE.Vector3(maxX - minX, maxY - minY, maxZ - minZ)
+      size: new THREE.Vector3(Math.max(1e-4, maxX - minX), Math.max(1e-4, maxY - minY), Math.max(1e-4, maxZ - minZ))
     };
   };
 
@@ -685,112 +529,42 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
   // Create or update 3D cuboid wireframe in scene - adds new box to array
   const updateCuboidWireframe = (worldBounds, isTemporary = false) => {
     try {
-      if (!sceneRef.current || !worldBounds) {
-        console.warn('Main_View: Cannot update wireframe - scene or bounds missing');
-        return;
-      }
+      const vtk = vtkViewRef.current;
+      if (!vtk || !worldBounds) return;
+      let size, center;
+      if (worldBounds.center && worldBounds.size) {
+        size = worldBounds.size;
+        center = worldBounds.center;
+      } else if (worldBounds.min && worldBounds.max) {
+        const min = worldBounds.min;
+        const max = worldBounds.max;
+        size = { x: Math.abs(max.x - min.x), y: Math.abs(max.y - min.y), z: Math.abs(max.z - min.z) };
+        center = { x: (min.x + max.x) / 2, y: (min.y + max.y) / 2, z: (min.z + max.z) / 2 };
+      } else return;
 
-      if (!worldBounds.size || !worldBounds.center) {
-        console.warn('Main_View: Invalid worldBounds structure:', worldBounds);
-        return;
-      }
-
-      // Create new wireframe cuboid
-      const size = worldBounds.size;
-      const center = worldBounds.center;
-
-      // Validate size values
-      if (!size.x || !size.y || !size.z ||
-        isNaN(size.x) || isNaN(size.y) || isNaN(size.z) ||
-        !isFinite(size.x) || !isFinite(size.y) || !isFinite(size.z) ||
-        size.x <= 0 || size.y <= 0 || size.z <= 0) {
-        console.warn('Main_View: Invalid size values:', size);
-        return;
-      }
-
-      // Ensure minimum size
-      const minSize = 0.001;
-      const safeSizeX = Math.max(minSize, Math.abs(size.x));
-      const safeSizeY = Math.max(minSize, Math.abs(size.y));
-      const safeSizeZ = Math.max(minSize, Math.abs(size.z));
-
-      const boxGeometry = new THREE.BoxGeometry(safeSizeX, safeSizeY, safeSizeZ);
-      const boxEdges = new THREE.EdgesGeometry(boxGeometry);
-      
-      // Get color based on box index (number of non-temporary boxes)
-      const boxIndex = isTemporary ? cuboidWireframesRef.current.length : cuboidWireframesRef.current.length;
-      const boxColorHex = BOX_COLOR_MAP[boxIndex % BOX_COLOR_MAP.length];
-      const boxColor = parseInt(boxColorHex.replace('#', ''), 16);
-      
-      const boxMaterial = new THREE.LineBasicMaterial({
-        color: boxColor,
-        linewidth: 16,
-        transparent: true,
-        opacity: isTemporary ? 0.7 : 0.96
-      });
-      const wireframe = new THREE.LineSegments(boxEdges, boxMaterial);
-      wireframe.renderOrder = 100; // Render boxes on top
-
-      // Validate center values
-      if (center && !isNaN(center.x) && !isNaN(center.y) && !isNaN(center.z)) {
-        wireframe.position.copy(center);
-      } else {
-        wireframe.position.set(0, 0, 0);
-      }
-
-      // Mark as temporary if needed
+      const boxIndex = isTemporary ? -1 : cuboidWireframesRef.current.length;
+      const colorHex = isTemporary ? '#ffff00' : BOX_COLOR_MAP[Math.min(Math.max(boxIndex, 0), BOX_COLOR_MAP.length - 1)];
+      const id = isTemporary ? '__temp_selection__' : `sel-${Date.now()}-${boxIndex}`;
+      vtk.setWireframeBox(id, center, size, colorHex);
+      vtk.render();
       if (isTemporary) {
-        wireframe.userData.isTemporary = true;
+        cuboidWireframeRef.current = { userData: { isTemporary: true, vtkId: id, worldBounds } };
       } else {
-        // Store worldBounds in userData for matching with selectedRegionsData
-        wireframe.userData.worldBounds = worldBounds;
-        // Store color for reference
-        wireframe.userData.boxColor = boxColorHex;
-        wireframe.userData.boxIndex = boxIndex;
-      }
-
-      sceneRef.current.add(wireframe);
-      
-      // If not temporary, add to array (keep all boxes visible)
-      if (!isTemporary) {
-        cuboidWireframesRef.current.push(wireframe);
-        cuboidWireframeRef.current = wireframe;
-      } else {
-        // For temporary wireframes during selection, replace the previous temporary one
-        if (cuboidWireframeRef.current && cuboidWireframeRef.current.userData.isTemporary) {
-          try {
-            if (sceneRef.current.children.includes(cuboidWireframeRef.current)) {
-              sceneRef.current.remove(cuboidWireframeRef.current);
-            }
-            if (cuboidWireframeRef.current.geometry) {
-              cuboidWireframeRef.current.geometry.dispose();
-            }
-            if (cuboidWireframeRef.current.material) {
-              cuboidWireframeRef.current.material.dispose();
-            }
-          } catch (err) {
-            console.error('Main_View: Error removing temporary wireframe:', err);
-          }
+        if (cuboidWireframeRef.current?.userData?.isTemporary) {
+          vtk.removeWireframeBox('__temp_selection__');
         }
-        cuboidWireframeRef.current = wireframe;
+        const entry = { userData: { isTemporary: false, vtkId: id, worldBounds } };
+        cuboidWireframesRef.current.push(entry);
+        cuboidWireframeRef.current = entry;
+        setCuboidCenter(center);
+        setCuboidSize(size);
       }
-
-      // Store cuboid info
-      cuboidRef.current = {
-        center: center ? center.clone() : new THREE.Vector3(0, 0, 0),
-        size: size.clone(),
-        min: worldBounds.min ? worldBounds.min.clone() : new THREE.Vector3(-safeSizeX / 2, -safeSizeY / 2, -safeSizeZ / 2),
-        max: worldBounds.max ? worldBounds.max.clone() : new THREE.Vector3(safeSizeX / 2, safeSizeY / 2, safeSizeZ / 2)
-      };
-
-      boxGeometry.dispose();
     } catch (err) {
-      console.error('Main_View: Error in updateCuboidWireframe:', err);
-      console.error('Main_View: worldBounds:', worldBounds);
+      console.error('Main_View: updateCuboidWireframe', err);
     }
   };
 
-  // Create a sprite with ROI number label (canvas texture); position below the box
+    // Create a sprite with ROI number label (canvas texture); position below the box
   const createRoiLabelSprite = useCallback((roiIndex, center, boxSize) => {
     const canvas = document.createElement('canvas');
     const size = 64;
@@ -860,30 +634,49 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
     planeGeometry.dispose();
   }, [createRoiLabelSprite]);
 
-  // Sync ROI boxes from props: when roiBoxes (array) is set, convert each to world and add wireframes; when null, remove all
+  // Sync ConGAT model ROI boxes onto VTK Main scene (Three scene is not rendered anymore).
   useEffect(() => {
-    if (!sceneRef.current) return;
-    const scene = sceneRef.current;
-    const roiWireframes = roiWireframesRef.current;
-    while (roiWireframes.length) {
-      const entry = roiWireframes.pop();
-      const w = entry.wireframe || entry;
-      const s = entry.sprite;
-      if (scene.children.includes(w)) scene.remove(w);
-      if (w.geometry) w.geometry.dispose();
-      if (w.material) w.material.dispose();
-      if (s && scene.children.includes(s)) {
-        scene.remove(s);
-        if (s.material?.map) s.material.map.dispose();
-        if (s.material) s.material.dispose();
-      }
-    }
-    const list = Array.isArray(roiBoxes) ? roiBoxes : roiBoxes ? [roiBoxes] : [];
-    list.forEach((roiBox) => {
-      const worldBounds = roiBoxToWorldBounds(roiBox);
-      if (worldBounds) addRoiWireframe(worldBounds, roiBox.roiIndex ?? roiBox.roiId);
+    const vtk = vtkViewRef.current;
+    if (!vtk || !vtkReady) return;
+
+    const prevIds = roiWireframesRef.current || [];
+    prevIds.forEach((id) => {
+      try {
+        vtk.removeWireframeBox(typeof id === 'string' ? id : id?.vtkId);
+      } catch (_) { /* */ }
     });
-  }, [roiBoxes, roiBoxToWorldBounds, addRoiWireframe]);
+    roiWireframesRef.current = [];
+
+    const list = Array.isArray(roiBoxes) ? roiBoxes : roiBoxes ? [roiBoxes] : [];
+    if (!list.length) {
+      vtk.render();
+      return;
+    }
+
+    list.forEach((roiBox, idx) => {
+      const worldBounds = roiBoxToWorldBounds(roiBox);
+      if (!worldBounds?.center || !worldBounds?.size) return;
+      const roiIndex = roiBox.roiIndex ?? roiBox.roiId ?? idx + 1;
+      const id = `roi-${roiIndex}`;
+      const highlighted = highlightedRoiIndex != null && Number(highlightedRoiIndex) === Number(roiIndex);
+      const colorHex = highlighted ? '#ffff66' : '#00ff88';
+      const center = {
+        x: worldBounds.center.x,
+        y: worldBounds.center.y,
+        z: worldBounds.center.z
+      };
+      const size = {
+        x: worldBounds.size.x,
+        y: worldBounds.size.y,
+        z: Math.max(worldBounds.size.z, 1e-3)
+      };
+      vtk.setWireframeBox(id, center, size, colorHex);
+      roiWireframesRef.current.push(id);
+    });
+
+    console.log(`Main_View VTK: ROI overlay boxes = ${roiWireframesRef.current.length}`);
+    vtk.render();
+  }, [roiBoxes, highlightedRoiIndex, roiBoxToWorldBounds, vtkReady]);
 
   // Extract selected region data from all visible channels using 3D cuboid bounds
   const extractSelectedRegion = useCallback(async (worldBounds) => {
@@ -895,11 +688,23 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
     const selectedData = {
       channels: [],
       bounds: null,
-      worldBounds: worldBounds // Store world bounds for reference
+      worldBounds: {
+        min: { x: worldBounds.min.x, y: worldBounds.min.y, z: worldBounds.min.z },
+        max: { x: worldBounds.max.x, y: worldBounds.max.y, z: worldBounds.max.z },
+        center: worldBounds.center
+          ? { x: worldBounds.center.x, y: worldBounds.center.y, z: worldBounds.center.z }
+          : null,
+        size: worldBounds.size
+          ? { x: worldBounds.size.x, y: worldBounds.size.y, z: worldBounds.size.z }
+          : null
+      }
     };
 
-    // Get first channel metadata to calculate voxel bounds
-    const visibleChannels = channels.filter(c => c.visible !== false);
+    // Prefer live props; fall back to configs map used by VTK load path.
+    const liveChannels = (channelsPropRef.current?.length
+      ? channelsPropRef.current
+      : Array.from(channelConfigsRef.current.values()));
+    const visibleChannels = liveChannels.filter((c) => c.visible !== false);
     if (visibleChannels.length === 0) {
       console.warn('Main_View: extractSelectedRegion - No visible channels');
       return null;
@@ -997,7 +802,7 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
     console.log(`Main_View: Added ${selectedData.channels.length} channels to selection`);
 
     return selectedData;
-  }, [channels]);
+  }, []);
 
   // Handle selection completion with 3D cuboid bounds
   const handleSelectionComplete = useCallback(async (worldBounds) => {
@@ -1009,13 +814,14 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
     // Store bounds for refreshing selection when channels change
     currentSelectionBoundsRef.current = worldBounds;
 
+    const liveChannels = channelsPropRef.current || [];
     console.log('Main_View: ===== SELECTION COMPLETED =====');
     console.log('Main_View: 3D Cuboid selection completed');
     console.log('Main_View: World bounds:', worldBounds);
     console.log('Main_View: Cuboid center:', worldBounds.center);
     console.log('Main_View: Cuboid size:', worldBounds.size);
-    console.log('Main_View: Current channels:', channels);
-    console.log('Main_View: onSelectionChange callback exists:', !!onSelectionChange);
+    console.log('Main_View: Current channels:', liveChannels);
+    console.log('Main_View: onSelectionChange callback exists:', !!onSelectionChangeRef.current);
 
     try {
       const selectedData = await extractSelectedRegion(worldBounds);
@@ -1026,21 +832,28 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
         console.log('Main_View: Channels:', selectedData.channels);
         console.log('Main_View: Scaling factors:', selectedData.scaling);
 
-        if (onSelectionChange) {
-          onSelectionChange(selectedData);
+        if (onSelectionChangeRef.current) {
+          onSelectionChangeRef.current(selectedData);
         } else {
           console.warn('Main_View: onSelectionChange prop is missing');
         }
       } else {
         console.error('Main_View: ✗ Failed to extract selected region data');
         console.error('Main_View: World bounds were:', worldBounds);
-        console.error('Main_View: Visible channels:', channels.filter(c => c.visible !== false));
+        console.error(
+          'Main_View: Visible channels:',
+          liveChannels.filter((c) => c.visible !== false)
+        );
       }
     } catch (error) {
       console.error('Main_View: Error in handleSelectionComplete:', error);
       console.error('Main_View: Error stack:', error.stack);
     }
-  }, [channels, onSelectionChange, extractSelectedRegion]);
+  }, [extractSelectedRegion]);
+
+  useEffect(() => {
+    handleSelectionCompleteRef.current = handleSelectionComplete;
+  }, [handleSelectionComplete]);
 
   useImperativeHandle(ref, () => ({
     getCameraState: () => cloneCameraState(cameraStateRef.current),
@@ -1186,528 +999,211 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
     }
   }, [selectedRegionsData, renderScene]);
 
-  // Keep WebGL clear color in sync with Day/Night theme and update voxel blending
-  // (additive blending is invisible on white; day mode needs NormalBlending)
   useEffect(() => {
-    const renderer = rendererRef.current;
-    const scene = sceneRef.current;
-    if (!renderer) return;
-
-    const clearHex = (colors.canvasBg || '#000000').replace('#', '');
-    const clearColor = parseInt(clearHex, 16);
-    renderer.setClearColor(clearColor);
-    if (scene) {
-      scene.background = new THREE.Color(clearColor);
+    const vtk = vtkViewRef.current;
+    if (!vtk) return;
+    // Only refresh background + transfer functions — do NOT rebuild volume textures
+    // (full upsert on theme toggle was causing WebGL context loss).
+    vtk.setBackground(colors.canvasBg || '#000000');
+    if (typeof vtk.updateAllAppearances === 'function') {
+      vtk.updateAllAppearances({ lightMode: theme === 'light' });
+    } else {
+      vtk.render();
     }
+  }, [theme, colors.canvasBg]);
 
-    const useAdditive = theme !== 'light';
-    const updateMeshMaterial = (mesh) => {
-      if (!mesh?.material) return;
-      mesh.material.blending = useAdditive ? THREE.AdditiveBlending : THREE.NormalBlending;
-      mesh.material.depthWrite = !useAdditive;
-      mesh.material.depthTest = !useAdditive;
-      mesh.material.fragmentShader = VOXEL_FRAGMENT_SHADER;
-      if (mesh.material.uniforms?.lightMode) {
-        mesh.material.uniforms.lightMode.value = useAdditive ? 0.0 : 1.0;
-      }
-      mesh.material.needsUpdate = true;
-      if (mesh.userData) mesh.userData.theme = theme;
-    };
 
-    pointCloudsRef.current.forEach(updateMeshMaterial);
-    loadedChannelsRef.current.forEach((entry) => {
-      if (entry?.mesh) updateMeshMaterial(entry.mesh);
-    });
-
-    renderScene();
-  }, [theme, colors.canvasBg, renderScene]);
-
-  // Setup Three.js scene
+  // Local-style VTK Main scene (smooth multi-volume ray casting)
   useEffect(() => {
     if (!mountRef.current) return;
-
     const container = mountRef.current;
-    const width = container.clientWidth;
-    const height = container.clientHeight;
+    const host = vtkMountRef.current || container;
+    const rect = container.getBoundingClientRect();
+    const width = Math.max(1, Math.floor(rect.width || container.clientWidth || 800));
+    const height = Math.max(1, Math.floor(rect.height || container.clientHeight || 600));
+
+    // Same recipe as Local_View: interactive VTK + resetCamera framing
+    const vtkView = createVtkVolumeView(host, {
+      interactive: true,
+      maxVoxels: getMainVtkMaxVoxels(1),
+      sampleDistance: 0.35,
+      worldSpace: true
+    });
+    vtkView.setBackground(colors.canvasBg || '#000000');
+    vtkView.resize();
+    vtkViewRef.current = vtkView;
+    vtkReadyRef.current = true;
+    setVtkReady(true);
+    cameraFramedRef.current = false;
 
     const scene = new THREE.Scene();
     sceneRef.current = scene;
-
-    const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(75, width / height, 0.01, 1000);
     cameraRef.current = camera;
-    updateCameraPosition();
 
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: false,
-      powerPreference: 'high-performance'
-    });
-    renderer.setSize(width, height);
-    const clearHex = (colors.canvasBg || '#000000').replace('#', '');
-    const clearColor = parseInt(clearHex, 16);
-    renderer.setClearColor(clearColor);
-    scene.background = new THREE.Color(clearColor);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    if (renderer.outputColorSpace !== undefined) {
-      renderer.outputColorSpace = THREE.SRGBColorSpace;
-    }
-    container.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
+    const canvas = vtkView.getCanvas() || host;
+    rendererRef.current = { domElement: canvas, setSize() {}, dispose() {} };
+    composerRef.current = null;
+    aaPassRef.current = null;
+    msaaRenderTargetRef.current = null;
 
-    let renderTarget = null;
-    if (renderer.capabilities.isWebGL2 && THREE.WebGLMultisampleRenderTarget) {
-      const samples = window.devicePixelRatio > 1 ? 4 : 2;
-      renderTarget = new THREE.WebGLMultisampleRenderTarget(width, height, {
-        format: THREE.RGBAFormat,
-        encoding: renderer.outputEncoding
-      });
-      renderTarget.samples = samples;
-      msaaRenderTargetRef.current = renderTarget;
-      console.log(`Main_View: MSAA render target enabled with ${samples}x samples`);
-    } else {
-      msaaRenderTargetRef.current = null;
-      console.log('Main_View: MSAA not available, using post-process AA');
-    }
-
-    const composer = renderTarget
-      ? new EffectComposer(renderer, renderTarget)
-      : new EffectComposer(renderer);
-    const renderPass = new RenderPass(scene, camera);
-    composer.addPass(renderPass);
-
-    let aaPass = null;
-    if (!renderTarget) {
-      try {
-        aaPass = new SMAAPass(width * renderer.getPixelRatio(), height * renderer.getPixelRatio());
-        composer.addPass(aaPass);
-        console.log('Main_View: SMAA pass enabled');
-      } catch (error) {
-        console.warn('Main_View: SMAA unavailable, falling back to FXAA', error);
-        aaPass = new ShaderPass(FXAAShader);
-        aaPass.material.uniforms.resolution.value.set(1 / width, 1 / height);
-        composer.addPass(aaPass);
-        console.log('Main_View: FXAA pass enabled');
+    let contextLost = false;
+    const onContextLost = (e) => {
+      e.preventDefault();
+      contextLost = true;
+      console.warn(
+        'Main_View: WebGL context lost (GPU memory). Reduce visible channels or resolution, then refresh.'
+      );
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
       }
+    };
+    const onContextRestored = () => {
+      console.warn('Main_View: WebGL context restored — reload the page to rebuild volumes.');
+      contextLost = false;
+    };
+    if (canvas?.addEventListener) {
+      canvas.addEventListener('webglcontextlost', onContextLost, false);
+      canvas.addEventListener('webglcontextrestored', onContextRestored, false);
     }
 
-    composerRef.current = composer;
-    aaPassRef.current = aaPass;
+    console.log('Main_View: Local-style VTK ready', width, 'x', height);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 1.0));
-
-    let isRotating = false;
-    let isPanning = false;
-    let mouseX = 0;
-    let mouseY = 0;
     let selectionStartPos = null;
     let currentCuboidDepth = 0.1;
 
     const handleMouseDown = (e) => {
-      try {
-        console.log('Main_View: Mouse down - selectionMode:', selectionModeRef.current, 'button:', e.button);
-        if (selectionModeRef.current && e.button === 0) {
-          // Start 3D cuboid selection
-          console.log('Main_View: Starting 3D cuboid selection...');
-          if (!rendererRef.current || !rendererRef.current.domElement) {
-            console.error('Main_View: Renderer not initialized');
-            return;
-          }
-          const rect = rendererRef.current.domElement.getBoundingClientRect();
-          selectionStartPos = { x: e.clientX, y: e.clientY };
-          setIsSelecting(true);
-          setSelectionStart(selectionStartPos);
-          setSelectionEnd(selectionStartPos);
-          currentCuboidDepth = cuboidDepth;
-          console.log('Main_View: Selection started at:', selectionStartPos, 'depth:', currentCuboidDepth);
-
-          // Don't clear previous cuboids - we want to keep all selections visible
-          // Only clear temporary wireframe if it exists
-          if (cuboidWireframeRef.current && cuboidWireframeRef.current.userData.isTemporary && sceneRef.current) {
-            try {
-              sceneRef.current.remove(cuboidWireframeRef.current);
-              if (cuboidWireframeRef.current.geometry) cuboidWireframeRef.current.geometry.dispose();
-              if (cuboidWireframeRef.current.material) cuboidWireframeRef.current.material.dispose();
-              cuboidWireframeRef.current = null;
-            } catch (err) {
-              console.error('Main_View: Error clearing temporary cuboid:', err);
-            }
-          }
-        } else {
-          if (e.button === 0) isRotating = true;
-          if (e.button === 2) isPanning = true;
-          mouseX = e.clientX;
-          mouseY = e.clientY;
-        }
-      } catch (err) {
-        console.error('Main_View: Error in handleMouseDown:', err);
+      if (!(selectionModeRef.current && e.button === 0)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      selectionStartPos = { x: e.clientX, y: e.clientY };
+      setIsSelecting(true);
+      setSelectionStart(selectionStartPos);
+      setSelectionEnd(selectionStartPos);
+      currentCuboidDepth = cuboidDepth;
+      if (cuboidWireframeRef.current?.userData?.isTemporary) {
+        vtkView.removeWireframeBox(cuboidWireframeRef.current.userData.vtkId || '__temp_selection__');
+        cuboidWireframeRef.current = null;
       }
     };
 
     const handleMouseUp = (e) => {
-      try {
-        console.log('Main_View: Mouse up - selectionMode:', selectionModeRef.current, 'selectionStartPos:', selectionStartPos);
-        if (selectionModeRef.current && selectionStartPos) {
-          // Complete 3D cuboid selection
-          const endX = e.clientX;
-          const endY = e.clientY;
-
-          console.log('Main_View: Selection completed - start:', selectionStartPos, 'end:', { x: endX, y: endY }, 'depth:', currentCuboidDepth);
-
-          // Get final world bounds with current depth
-          const worldBounds = getWorldBoundsFromSelection(
-            selectionStartPos.x,
-            selectionStartPos.y,
-            endX,
-            endY,
-            currentCuboidDepth
-          );
-
-          console.log('Main_View: World bounds from selection:', worldBounds);
-
-          if (worldBounds) {
-            try {
-              // Remove temporary wireframe first
-              if (cuboidWireframeRef.current && cuboidWireframeRef.current.userData.isTemporary) {
-                try {
-                  if (sceneRef.current && sceneRef.current.children.includes(cuboidWireframeRef.current)) {
-                    sceneRef.current.remove(cuboidWireframeRef.current);
-                  }
-                  if (cuboidWireframeRef.current.geometry) cuboidWireframeRef.current.geometry.dispose();
-                  if (cuboidWireframeRef.current.material) cuboidWireframeRef.current.material.dispose();
-                  cuboidWireframeRef.current = null;
-                } catch (err) {
-                  console.error('Main_View: Error removing temporary wireframe:', err);
-                }
-              }
-
-              // Keep wireframe visible (add to array, not temporary)
-              updateCuboidWireframe(worldBounds, false);
-
-              // Extract and send selection data
-              console.log('Main_View: Calling handleSelectionComplete...');
-              handleSelectionComplete(worldBounds).catch(err => {
-                console.error('Main_View: Error in handleSelectionComplete:', err);
-              });
-              
-              // Auto-disable selection mode after completing a box selection
-              // This allows user to interact with data (zoom, rotate, etc.) with previous boxes visible
-              console.log('Main_View: Auto-disabling selection mode after box completion');
-              setSelectionMode(false);
-            } catch (err) {
-              console.error('Main_View: Error updating cuboid wireframe:', err);
-            }
-          } else {
-            console.warn('Main_View: No world bounds calculated from selection');
-          }
-
-          setIsSelecting(false);
-          setSelectionStart(null);
-          setSelectionEnd(null);
-          selectionStartPos = null;
-        } else {
-          isRotating = false;
-          isPanning = false;
-        }
-      } catch (err) {
-        console.error('Main_View: Error in handleMouseUp:', err);
-        setIsSelecting(false);
-        isRotating = false;
-        isPanning = false;
+      if (!(selectionModeRef.current && selectionStartPos)) return;
+      e.preventDefault?.();
+      const worldBounds = getWorldBoundsFromSelection(
+        selectionStartPos.x, selectionStartPos.y, e.clientX, e.clientY, currentCuboidDepth
+      );
+      if (worldBounds) {
+        updateCuboidWireframe(worldBounds, false);
+        handleSelectionCompleteRef.current?.(worldBounds)?.catch?.(console.error);
+        setSelectionMode(false);
+      } else {
+        console.warn('Main_View: selection mouseup produced no worldBounds');
       }
+      setIsSelecting(false);
+      setSelectionStart(null);
+      setSelectionEnd(null);
+      selectionStartPos = null;
     };
 
     const handleMouseMove = (e) => {
-      try {
-        if (selectionModeRef.current && selectionStartPos) {
-          // Update 3D cuboid selection box
-          setSelectionEnd({ x: e.clientX, y: e.clientY });
-
-          // Update wireframe in real-time
-          const worldBounds = getWorldBoundsFromSelection(
-            selectionStartPos.x,
-            selectionStartPos.y,
-            e.clientX,
-            e.clientY,
-            currentCuboidDepth
-          );
-
-          if (worldBounds) {
-            try {
-              // Update temporary wireframe during selection (will be replaced on completion)
-              updateCuboidWireframe(worldBounds, true);
-              setCuboidCenter(worldBounds.center);
-              setCuboidSize(worldBounds.size);
-            } catch (err) {
-              console.error('Main_View: Error updating wireframe:', err);
-            }
-          }
-        } else {
-          const state = cameraStateRef.current;
-          if (isRotating) {
-            state.rotation.y += (e.clientX - mouseX) * 0.01;
-            state.rotation.x = clamp(state.rotation.x + (e.clientY - mouseY) * 0.01, -Math.PI / 2 + 0.01, Math.PI / 2 - 0.01);
-            updateCameraPosition();
-            updateChannelLOD();
-          }
-          if (isPanning) {
-            state.panOffset.x += (e.clientX - mouseX) * 0.001;
-            state.panOffset.y -= (e.clientY - mouseY) * 0.001;
-            updateCameraPosition();
-          }
-          if (onRoiHover && !isRotating && !isPanning && rendererRef.current && cameraRef.current && sceneRef.current) {
-            const rect = rendererRef.current.domElement.getBoundingClientRect();
-            const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-            const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-            const raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), cameraRef.current);
-            const roiObjects = roiWireframesRef.current.flatMap((entry) => [entry.wireframe, entry.sprite].filter(Boolean));
-            const hits = raycaster.intersectObjects(roiObjects, false);
-            if (hits.length > 0 && hits[0].object.userData.roiIndex != null) {
-              onRoiHover(hits[0].object.userData.roiIndex);
-            } else {
-              onRoiHover(null);
-            }
-          }
-        }
-        mouseX = e.clientX;
-        mouseY = e.clientY;
-      } catch (err) {
-        console.error('Main_View: Error in handleMouseMove:', err);
+      if (!(selectionModeRef.current && selectionStartPos)) return;
+      setSelectionEnd({ x: e.clientX, y: e.clientY });
+      const worldBounds = getWorldBoundsFromSelection(
+        selectionStartPos.x, selectionStartPos.y, e.clientX, e.clientY, currentCuboidDepth
+      );
+      if (worldBounds) {
+        updateCuboidWireframe(worldBounds, true);
+        setCuboidCenter(worldBounds.center);
+        setCuboidSize(worldBounds.size);
       }
     };
 
     const handleWheel = (e) => {
-      try {
-        if (selectionModeRef.current && isSelectingRef.current && selectionStartPos) {
-          // Adjust Z-depth during selection
-          e.preventDefault();
-          const depthDelta = e.deltaY * 0.0001;
-          currentCuboidDepth = Math.max(0.01, Math.min(1.0, currentCuboidDepth + depthDelta));
-          setCuboidDepth(currentCuboidDepth);
-
-          // Update wireframe with new depth (temporary only)
-          const endPos = selectionEndRef.current || selectionStartPos;
-          const worldBounds = getWorldBoundsFromSelection(
-            selectionStartPos.x,
-            selectionStartPos.y,
-            endPos.x || selectionStartPos.x,
-            endPos.y || selectionStartPos.y,
-            currentCuboidDepth
-          );
-
-          if (worldBounds) {
-            try {
-              // Only update temporary wireframe during selection, don't add to array
-              updateCuboidWireframe(worldBounds, true);
-              setCuboidCenter(worldBounds.center);
-              setCuboidSize(worldBounds.size);
-            } catch (err) {
-              console.error('Main_View: Error updating wireframe on wheel:', err);
-            }
-          }
-        } else if (selectionModeRef.current && cuboidWireframesRef.current.length > 0) {
-          // If selection mode is active and we have boxes, move the last one in Z direction
-          e.preventDefault();
-          const zDelta = e.deltaY * 0.001;
-          
-          // Move only the last (most recent) box in Z direction
-          const lastBox = cuboidWireframesRef.current[cuboidWireframesRef.current.length - 1];
-          if (lastBox && !lastBox.userData.isTemporary) {
-            lastBox.position.z += zDelta;
-            
-            // Also update cuboidRef if it exists
-            if (cuboidRef.current) {
-              cuboidRef.current.center.z += zDelta;
-              cuboidRef.current.min.z += zDelta;
-              cuboidRef.current.max.z += zDelta;
-            }
-          }
-        } else {
-          // Normal zoom (only when not in selection mode or no box selected)
-          const state = cameraStateRef.current;
-          const zoomFactor = 1 + e.deltaY * 0.001;
-          const oldDistance = state.distance;
-          state.distance *= zoomFactor;
-          state.distance = clamp(state.distance, 0.1, 20);
-          
-          // Calculate zoom toward mouse position
-          if (cameraRef.current && rendererRef.current) {
-            const rect = rendererRef.current.domElement.getBoundingClientRect();
-            const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-            const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-            
-            // Calculate world position under mouse
-            const raycaster = new THREE.Raycaster();
-            raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), cameraRef.current);
-            
-            // Calculate the offset to zoom toward mouse position
-            const zoomDelta = (oldDistance - state.distance) * 0.3;
-            const direction = raycaster.ray.direction.clone().normalize();
-            
-            // Apply pan offset toward mouse direction
-            state.panOffset.x += direction.x * zoomDelta;
-            state.panOffset.y += direction.y * zoomDelta;
-            state.panOffset.z += direction.z * zoomDelta;
-          }
-          
-          updateCameraPosition();
-          updateChannelLOD();
-        }
-      } catch (err) {
-        console.error('Main_View: Error in handleWheel:', err);
-      }
+      if (!(selectionModeRef.current && isSelectingRef.current && selectionStartPos)) return;
+      e.preventDefault();
+      currentCuboidDepth = Math.max(0.01, Math.min(1, currentCuboidDepth + e.deltaY * 0.0001));
+      setCuboidDepth(currentCuboidDepth);
+      const endPos = selectionEndRef.current || selectionStartPos;
+      const worldBounds = getWorldBoundsFromSelection(
+        selectionStartPos.x, selectionStartPos.y, endPos.x, endPos.y, currentCuboidDepth
+      );
+      if (worldBounds) updateCuboidWireframe(worldBounds, true);
     };
 
-    const handleContextMenu = (event) => event.preventDefault();
+    const handleContextMenu = (e) => e.preventDefault();
+    const handleKeyDown = (e) => { keysRef.current[e.key.toLowerCase()] = true; };
+    const handleKeyUp = (e) => { keysRef.current[e.key.toLowerCase()] = false; };
 
-    const handleKeyDown = (event) => {
-      const key = event.key.toLowerCase();
-      keysRef.current[key] = true;
-      keysRef.current[event.code.toLowerCase()] = true;
-    };
-
-    const handleKeyUp = (event) => {
-      const key = event.key.toLowerCase();
-      keysRef.current[key] = false;
-      keysRef.current[event.code.toLowerCase()] = false;
-    };
-
-    renderer.domElement.addEventListener('mousedown', handleMouseDown);
-    renderer.domElement.addEventListener('mouseup', handleMouseUp);
-    renderer.domElement.addEventListener('mousemove', handleMouseMove);
-    renderer.domElement.addEventListener('wheel', handleWheel);
-    renderer.domElement.addEventListener('contextmenu', handleContextMenu);
-
-    renderer.domElement.setAttribute('tabindex', '0');
-    renderer.domElement.style.outline = 'none';
-    renderer.domElement.addEventListener('click', () => {
-      renderer.domElement.focus();
-    });
-
+    canvas.addEventListener('mousedown', handleMouseDown, true);
+    window.addEventListener('mouseup', handleMouseUp, true);
+    window.addEventListener('mousemove', handleMouseMove, true);
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    canvas.addEventListener('contextmenu', handleContextMenu);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
     const animate = () => {
-      handleMovement();
+      if (contextLost) return;
       renderScene();
       animationRef.current = requestAnimationFrame(animate);
     };
     animationRef.current = requestAnimationFrame(animate);
 
     const handleResize = () => {
-      const newWidth = container.clientWidth;
-      const newHeight = container.clientHeight;
-      camera.aspect = newWidth / newHeight;
+      const r = container.getBoundingClientRect();
+      const w = Math.max(1, Math.floor(r.width || 1));
+      const h = Math.max(1, Math.floor(r.height || 1));
+      camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      renderer.setSize(newWidth, newHeight);
-      if (composerRef.current) {
-        composerRef.current.setSize(newWidth, newHeight);
-      }
-      if (msaaRenderTargetRef.current) {
-        msaaRenderTargetRef.current.setSize(newWidth, newHeight);
-      }
-      if (aaPassRef.current) {
-        if (typeof aaPassRef.current.setSize === 'function') {
-          aaPassRef.current.setSize(newWidth * renderer.getPixelRatio(), newHeight * renderer.getPixelRatio());
-        } else if (aaPassRef.current.material?.uniforms?.resolution) {
-          aaPassRef.current.material.uniforms.resolution.value.set(1 / newWidth, 1 / newHeight);
-        }
-      }
+      vtkView.resize();
+      const c = vtkView.getCanvas();
+      if (c) rendererRef.current = { domElement: c, setSize() {}, dispose() {} };
+      renderScene();
     };
-
     window.addEventListener('resize', handleResize);
+    requestAnimationFrame(handleResize);
 
     return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('mouseup', handleMouseUp, true);
+      window.removeEventListener('mousemove', handleMouseMove, true);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
-      renderer.domElement.removeEventListener('mousedown', handleMouseDown);
-      renderer.domElement.removeEventListener('mouseup', handleMouseUp);
-      renderer.domElement.removeEventListener('mousemove', handleMouseMove);
-      renderer.domElement.removeEventListener('wheel', handleWheel);
-      renderer.domElement.removeEventListener('contextmenu', handleContextMenu);
-
-      pointCloudsRef.current.forEach(disposeMesh);
-      pointCloudsRef.current = [];
+      canvas.removeEventListener('mousedown', handleMouseDown, true);
+      canvas.removeEventListener('wheel', handleWheel);
+      canvas.removeEventListener('contextmenu', handleContextMenu);
+      if (canvas?.removeEventListener) {
+        canvas.removeEventListener('webglcontextlost', onContextLost, false);
+        canvas.removeEventListener('webglcontextrestored', onContextRestored, false);
+      }
       loadedChannelsRef.current.clear();
       channelDataCacheRef.current.clear();
-      channelConfigsRef.current.clear();
-      lodStateRef.current = { lastSampling: null, lastUpdate: 0 };
-
-      // Cleanup all selection boxes
-      cuboidWireframesRef.current.forEach((wireframe) => {
-        if (wireframe && sceneRef.current) {
-          try {
-            if (sceneRef.current.children.includes(wireframe)) {
-              sceneRef.current.remove(wireframe);
-            }
-            if (wireframe.geometry) wireframe.geometry.dispose();
-            if (wireframe.material) wireframe.material.dispose();
-          } catch (err) {
-            console.error('Main_View: Error disposing wireframe:', err);
-          }
-        }
-      });
-      cuboidWireframesRef.current = [];
-      roiWireframesRef.current.forEach((entry) => {
-        const w = entry.wireframe || entry;
-        const s = entry.sprite;
-        if (w && sceneRef.current) {
-          try {
-            if (sceneRef.current.children.includes(w)) sceneRef.current.remove(w);
-            if (w.geometry) w.geometry.dispose();
-            if (w.material) w.material.dispose();
-          } catch (err) {
-            console.error('Main_View: Error disposing ROI wireframe:', err);
-          }
-        }
-        if (s && sceneRef.current) {
-          try {
-            if (sceneRef.current.children.includes(s)) sceneRef.current.remove(s);
-            if (s.material?.map) s.material.map.dispose();
-            if (s.material) s.material.dispose();
-          } catch (err) {
-            console.error('Main_View: Error disposing ROI label:', err);
-          }
-        }
-      });
-      roiWireframesRef.current = [];
-
-      if (msaaRenderTargetRef.current) {
-        msaaRenderTargetRef.current.dispose();
-        msaaRenderTargetRef.current = null;
-      }
-      composerRef.current = null;
-      aaPassRef.current = null;
-
-      if (container.contains(renderer.domElement)) {
-        container.removeChild(renderer.domElement);
-      }
-      renderer.dispose();
+      vtkView.delete();
+      vtkViewRef.current = null;
+      vtkReadyRef.current = false;
+      setVtkReady(false);
+      cameraFramedRef.current = false;
+      rendererRef.current = null;
+      sceneRef.current = null;
+      cameraRef.current = null;
     };
-  }, [handleMovement, renderScene, updateCameraPosition, updateChannelLOD, handleSelectionComplete]);
+  }, []); // Local-style: init VTK once; handlers close over refs
 
   useEffect(() => {
-    const scene = sceneRef.current;
-    if (!scene) return;
+    const vtk = vtkViewRef.current;
+    if (!vtk || !vtkReady) return;
 
     if (channels.length === 0) {
       const loadedChannels = loadedChannelsRef.current;
-      loadedChannels.forEach((entry) => {
-        const mesh = entry?.mesh;
-        if (mesh && scene.children.includes(mesh)) {
-          scene.remove(mesh);
-        }
-        disposeMesh(mesh);
-      });
+      loadedChannels.forEach((_e, key) => vtk.removeChannel(key));
       loadedChannels.clear();
       channelDataCacheRef.current.clear();
       channelConfigsRef.current.clear();
       pointCloudsRef.current = [];
+      cameraFramedRef.current = false;
       renderScene();
       return;
     }
@@ -1727,26 +1223,12 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
       const channelConfig = channelConfigByKey.get(key);
 
       if (!channelConfig) {
-        // Channel completely removed from list - dispose everything
-        const mesh = entry?.mesh;
-        if (mesh && scene.children.includes(mesh)) {
-          scene.remove(mesh);
-          needsRender = true;
-        }
-        disposeMesh(mesh);
-        removeMeshFromCollection(mesh, pointCloudsRef.current);
+        vtk.removeChannel(key);
         loadedChannels.delete(key);
         channelDataCache.delete(key);
-        console.log(`Main_View: Removed channel (key=${key}) (no longer selected)`);
+        needsRender = true;
       } else {
-        // Channel still exists - check visibility and remove from scene if not visible
-        const isVisible = channelConfig.visible !== false;
-        const mesh = entry?.mesh;
-        if (mesh && scene.children.includes(mesh) && !isVisible) {
-          scene.remove(mesh);
-          needsRender = true;
-          console.log(`Main_View: ⚠️ Channel ${channelConfig.channelIndex} removed from scene (not visible)`);
-        }
+        vtk.setChannelVisible(key, channelConfig.visible !== false);
       }
     });
 
@@ -1769,42 +1251,49 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
       const configChanged = entry?.configSignature !== newSignature;
 
       if (entry && configChanged) {
-        if (mesh && scene.children.includes(mesh)) {
-          scene.remove(mesh);
-        }
-        disposeMesh(mesh);
-        removeMeshFromCollection(mesh, pointCloudsRef.current);
+        vtk.removeChannel(key);
         loadedChannels.delete(key);
         channelDataCache.delete(key);
         mesh = null;
-        console.log(`Main_View:  Channel ${channelIndex} flagged for reload due to configuration change`);
+        cameraFramedRef.current = false;
       }
-
-      // Handle visibility changes for existing meshes
-      if (mesh) {
-        const isVisible = channelConfig.visible !== false;
-        const currentlyInScene = scene.children.includes(mesh);
-        if (isVisible && !currentlyInScene) {
-          scene.add(mesh);
-          console.log(`Main_View:  Channel ${channelIndex} turned ON`);
-          renderScene();
-        } else if (!isVisible && currentlyInScene) {
-          scene.remove(mesh);
-          console.log(`Main_View:  Channel ${channelIndex} turned OFF`);
-          renderScene();
-        }
+      if (vtk.hasChannel(key)) {
+        vtk.setChannelVisible(key, channelConfig.visible !== false);
       }
     });
 
+    // Re-balance GPU texture size when visible channel count changes (avoids CONTEXT_LOST).
+    const visibleCountNow = Math.max(
+      1,
+      channels.filter((c) => c.visible !== false).length
+    );
+    if (lastGpuBudgetCountRef.current !== visibleCountNow) {
+      lastGpuBudgetCountRef.current = visibleCountNow;
+      loadedChannels.forEach((_entry, key) => {
+        const data = channelDataCache.get(key);
+        const cfg = channelConfigsRef.current.get(key);
+        if (data && cfg && vtk.hasChannel(key)) {
+          upsertVtkChannel(key, data, cfg, visibleCountNow);
+        }
+      });
+    }
+
     const loadChannels = async () => {
       const visibleChannels = channels.filter((cfg) => cfg.visible !== false);
-      const toLoad = visibleChannels.filter((cfg) => !loadedChannels.has(getChannelCacheKey(cfg)));
+      const visibleCount = Math.max(1, visibleChannels.length);
+      const toLoad = visibleChannels.filter((cfg) => {
+        const key = getChannelCacheKey(cfg);
+        return !loadedChannels.has(key) || !vtk.hasChannel(key);
+      });
       if (toLoad.length === 0) {
         renderScene();
         return;
       }
-
-      console.log(`Main_View: Loading ${toLoad.length} channel(s)`);
+      console.log(
+        `Main_View VTK: Loading ${toLoad.length} channel(s); ` +
+        `GPU budget ~${(getMainVtkMaxVoxels(visibleCount) / 1e6).toFixed(0)}M voxels/channel ` +
+        `(${visibleCount} visible)`
+      );
 
       for (const channelConfig of toLoad) {
         if (channelConfig.visible === false) continue;
@@ -1838,35 +1327,21 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
             continue;
           }
 
-          // Prefer latest thresholds/color if they changed during the long fetch
           const renderConfig = latestConfig || channelConfig;
           if (!channelData) continue;
 
-          const desiredSampling = getDesiredSampling(cameraStateRef.current?.distance || 3);
-          const result = createChannelVisualization(channelData, renderConfig, desiredSampling);
-
-          if (result) {
-            const { mesh, sampling } = result;
+          const ok = upsertVtkChannel(cacheKey, channelData, renderConfig, visibleCount);
+          if (ok) {
             loadedChannels.set(cacheKey, {
-              mesh,
-              sampling,
-              lastRequestedSampling: desiredSampling,
+              mesh: null,
+              sampling: 1,
+              lastRequestedSampling: 1,
               configSignature: getConfigSignature(renderConfig)
             });
-            lodStateRef.current.lastSampling = sampling;
-            pointCloudsRef.current.push(mesh);
-
-            if (renderConfig.visible !== false) {
-              scene.add(mesh);
-              mesh.renderOrder = 1;
-              console.log(`Main_View:  Channel ${renderConfig.channelIndex} added (sampling=${sampling})`);
-            } else {
-              console.log(`Main_View:  Channel ${renderConfig.channelIndex} prepared but not visible`);
-            }
-
+            console.log(`Main_View VTK: channel ${renderConfig.channelIndex} ready`);
             renderScene();
           } else {
-            console.warn(`Main_View:  Channel ${channelConfig.channelIndex} produced no voxels`);
+            console.warn(`Main_View VTK: channel ${channelConfig.channelIndex} failed`);
           }
         } catch (error) {
           console.error(`Main_View:  Error loading channel ${channelConfig.channelIndex}:`, error);
@@ -1875,18 +1350,15 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
-      const visibleCount = visibleChannels.filter((cfg) => {
-        const entry = loadedChannels.get(getChannelCacheKey(cfg));
-        return entry?.mesh && scene.children.includes(entry.mesh);
-      }).length;
-      console.log(`Main_View: Channel update complete. Visible ${visibleCount}/${visibleChannels.length}`);
+      const readyCount = visibleChannels.filter((cfg) => vtk.hasChannel(getChannelCacheKey(cfg))).length;
+      console.log(`Main_View VTK: Visible ${readyCount}/${visibleChannels.length}`);
       renderScene();
       // Signal that data loading/processing has occurred
       setDataLoadVersion(v => v + 1);
     };
 
     loadChannels();
-  }, [channels, createChannelVisualization, getDesiredSampling, loadChannelData, renderScene]);
+  }, [channels, upsertVtkChannel, renderScene, vtkReady]);
 
   // Calculate dimensions in micrometers (assuming 1 voxel = 1 μm, adjust as needed)
   const getCuboidDimensions = () => {
@@ -1965,7 +1437,9 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
         top: 0,
         left: 0,
         overflow: 'hidden'
-      }} />
+      }}>
+        <div ref={vtkMountRef} style={{ position: 'absolute', inset: 0 }} />
+      </div>
 
       {/* Selection Mode Toggle Button - Top Right */}
       <button
@@ -1988,25 +1462,18 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
             setSelectionMode(newMode);
 
             // Clear cuboid when disabling selection (defer to avoid render issues)
-            if (!newMode && cuboidWireframeRef.current && sceneRef.current) {
+            if (!newMode && cuboidWireframeRef.current) {
               requestAnimationFrame(() => {
                 try {
-                  if (sceneRef.current && cuboidWireframeRef.current) {
-                    if (sceneRef.current.children.includes(cuboidWireframeRef.current)) {
-                      sceneRef.current.remove(cuboidWireframeRef.current);
-                    }
-                    if (cuboidWireframeRef.current.geometry) {
-                      cuboidWireframeRef.current.geometry.dispose();
-                    }
-                    if (cuboidWireframeRef.current.material) {
-                      cuboidWireframeRef.current.material.dispose();
-                    }
-                    cuboidWireframeRef.current = null;
-                    cuboidRef.current = null;
-                    setCuboidCenter(null);
-                    setCuboidSize(null);
-                    currentSelectionBoundsRef.current = null; // Clear stored bounds
-                  }
+                  const vtk = vtkViewRef.current;
+                  const id = cuboidWireframeRef.current?.userData?.vtkId || '__temp_selection__';
+                  vtk?.removeWireframeBox?.(id);
+                  cuboidWireframeRef.current = null;
+                  cuboidRef.current = null;
+                  setCuboidCenter(null);
+                  setCuboidSize(null);
+                  currentSelectionBoundsRef.current = null;
+                  vtk?.render?.();
                 } catch (err) {
                   console.error('Main_View: Error clearing cuboid:', err);
                 } finally {
@@ -2029,11 +1496,11 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
         }}
         style={{
           position: 'absolute',
-          top: '10px',
+          top: '52px',
           right: '10px',
           zIndex: 1000,
           padding: '8px 16px',
-          backgroundColor: selectionMode ? '#4CAF50' : '#555',
+          backgroundColor: selectionMode ? 'rgba(76, 175, 80, 0.88)' : 'rgba(70, 70, 70, 0.75)',
           color: 'white',
           border: 'none',
           borderRadius: '4px',
@@ -2041,23 +1508,25 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
           fontSize: '14px',
           fontWeight: 'bold',
           boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-          transition: 'background-color 0.2s'
+          transition: 'background-color 0.2s',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)'
         }}
         title={selectionMode ? 'Click to disable 3D selection' : 'Click to enable 3D selection'}
       >
         {selectionMode ? '✓ 3D Selection' : '3D Selection'}
       </button>
 
-      {/* Reset View Button - Bottom Right */}
+      {/* Reset View Button - next to selection */}
       <button
         onClick={resetCameraView}
         style={{
           position: 'absolute',
-          bottom: '20px',
-          right: '10px',
+          top: '52px',
+          right: '140px',
           zIndex: 1000,
           padding: '8px 14px',
-          backgroundColor: '#555',
+          backgroundColor: 'rgba(70, 70, 70, 0.75)',
           color: 'white',
           border: 'none',
           borderRadius: '4px',
@@ -2068,10 +1537,12 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
           transition: 'background-color 0.2s',
           display: 'flex',
           alignItems: 'center',
-          gap: '6px'
+          gap: '6px',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)'
         }}
-        onMouseEnter={(e) => e.target.style.backgroundColor = '#666'}
-        onMouseLeave={(e) => e.target.style.backgroundColor = '#555'}
+        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(90, 90, 90, 0.85)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'rgba(70, 70, 70, 0.75)'; }}
         title="Reset camera to initial view"
       >
         ↺ Reset View
@@ -2081,17 +1552,19 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
       {selectionMode && !isSelecting && !cuboidDimensions && (
         <div style={{
           position: 'absolute',
-          top: '60px',
+          top: '100px',
           right: '10px',
           zIndex: 1000,
-          backgroundColor: 'rgba(45, 127, 249, 0.9)',
+          backgroundColor: 'rgba(45, 127, 249, 0.82)',
           color: 'white',
           padding: '10px 14px',
           borderRadius: '6px',
           fontSize: '14px',
           maxWidth: '220px',
           boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-          lineHeight: '1.5'
+          lineHeight: '1.5',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)'
         }}>
           <div style={{ fontWeight: 'bold', marginBottom: '6px' }}> How to Select:</div>
           <div>• <strong>Click & drag</strong> to draw selection box</div>
@@ -2104,7 +1577,7 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
       {selectionMode && cuboidDimensions && (
         <div style={{
           position: 'absolute',
-          top: '60px',
+          top: '100px',
           right: '10px',
           zIndex: 1000,
           backgroundColor: 'var(--legend-bg, rgba(0, 0, 0, 0.8))',
@@ -2114,7 +1587,9 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
           fontSize: '12px',
           fontFamily: 'monospace',
           minWidth: '200px',
-          border: '1px solid var(--border-color, #555)'
+          border: '1px solid var(--border-color, #555)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)'
         }}>
           <div style={{ fontWeight: 'bold', marginBottom: '5px', borderBottom: '1px solid var(--border-color, #555)', paddingBottom: '5px' }}>
             3D Cuboid Selection
@@ -2138,9 +1613,9 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
         <div
           style={{
             position: 'absolute',
-            top: '16px',
+            top: '52px',
             left: '16px',
-            background: 'rgba(0, 0, 0, 0.65)',
+            background: 'rgba(0, 0, 0, 0.55)',
             border: '1px solid rgba(255, 255, 255, 0.18)',
             borderRadius: '8px',
             padding: '12px 14px',

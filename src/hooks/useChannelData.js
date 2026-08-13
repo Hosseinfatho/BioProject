@@ -12,8 +12,9 @@ const MAX_LOAD_VOXELS = 200_000_000;
  * @param {number} channelIndex
  * @param {string} [basePath]
  */
-function getCacheKey(channelIndex, basePath) {
-    return basePath ? `${basePath}:${channelIndex}` : String(channelIndex);
+function getCacheKey(channelIndex, basePath, cacheSuffix = '') {
+    const base = basePath ? `${basePath}:${channelIndex}` : String(channelIndex);
+    return cacheSuffix ? `${base}::${cacheSuffix}` : base;
 }
 
 /**
@@ -49,68 +50,105 @@ function chooseLoadStrides(shape, maxVoxels = MAX_LOAD_VOXELS, basePath = '') {
 }
 
 /**
- * Read a uint8 volume from a fetch body, optionally downsampling while streaming
- * so a 2.9GB Very High channel never sits fully in JS heap.
+ * Read a uint8 volume from a fetch body, optionally downsampling / cropping while streaming
+ * so Very High (~2.9GB) never has to sit fully in JS heap.
+ *
+ * @param {Response} response
+ * @param {number[]} shape [z,y,x] original
+ * @param {{strideZ:number,strideY:number,strideX:number}} strides
+ * @param {{min:{x,y,z}, max:{x,y,z}}|null} cropBounds voxel crop in ORIGINAL coords
  */
-async function readVolumeFromResponse(response, shape, strides) {
+async function readVolumeFromResponse(response, shape, strides, cropBounds = null) {
     const [zSize, ySize, xSize] = shape.map(Number);
-    const { strideZ, strideY, strideX } = strides;
-    const outZ = Math.ceil(zSize / strideZ);
-    const outY = Math.ceil(ySize / strideY);
-    const outX = Math.ceil(xSize / strideX);
+    const strideZ = Math.max(1, strides.strideZ || 1);
+    const strideY = Math.max(1, strides.strideY || 1);
+    const strideX = Math.max(1, strides.strideX || 1);
     const planeSize = ySize * xSize;
-    const needsDownsample = strideZ > 1 || strideY > 1 || strideX > 1;
 
-    if (!needsDownsample) {
+    let z0 = 0;
+    let z1 = zSize - 1;
+    let y0 = 0;
+    let y1 = ySize - 1;
+    let x0 = 0;
+    let x1 = xSize - 1;
+    if (cropBounds?.min && cropBounds?.max) {
+        z0 = Math.max(0, Math.min(zSize - 1, Math.floor(cropBounds.min.z)));
+        z1 = Math.max(0, Math.min(zSize - 1, Math.ceil(cropBounds.max.z)));
+        y0 = Math.max(0, Math.min(ySize - 1, Math.floor(cropBounds.min.y)));
+        y1 = Math.max(0, Math.min(ySize - 1, Math.ceil(cropBounds.max.y)));
+        x0 = Math.max(0, Math.min(xSize - 1, Math.floor(cropBounds.min.x)));
+        x1 = Math.max(0, Math.min(xSize - 1, Math.ceil(cropBounds.max.x)));
+        if (z0 > z1) [z0, z1] = [z1, z0];
+        if (y0 > y1) [y0, y1] = [y1, y0];
+        if (x0 > x1) [x0, x1] = [x1, x0];
+    }
+
+    const outZ = Math.floor((z1 - z0) / strideZ) + 1;
+    const outY = Math.floor((y1 - y0) / strideY) + 1;
+    const outX = Math.floor((x1 - x0) / strideX) + 1;
+    const outVoxels = outZ * outY * outX;
+    if (outVoxels <= 0 || !Number.isFinite(outVoxels)) {
+        throw new Error('Invalid crop / stride output size');
+    }
+
+    const needsDownsampleOrCrop =
+        strideZ > 1 || strideY > 1 || strideX > 1 || z0 > 0 || y0 > 0 || x0 > 0 ||
+        z1 < zSize - 1 || y1 < ySize - 1 || x1 < xSize - 1;
+
+    // Full volume, no downsample: only safe for smaller arrays
+    if (!needsDownsampleOrCrop) {
         const arrayBuffer = await response.arrayBuffer();
         return {
             data: new Uint8Array(arrayBuffer),
             shape: [zSize, ySize, xSize],
-            loadStride: [1, 1, 1]
+            loadStride: [1, 1, 1],
+            cropOrigin: [0, 0, 0]
         };
     }
 
-    if (!response.body || typeof response.body.getReader !== 'function') {
-        // Fallback: still try full buffer then subsample (may OOM on Very High)
+    console.log(
+        `loadChannelData: streaming ${zSize}×${ySize}×${xSize} → crop/out ${outZ}×${outY}×${outX} ` +
+        `(origin z,y,x=${z0},${y0},${x0}; stride ${strideZ},${strideY},${strideX}; ~${(outVoxels / 1e6).toFixed(1)} MB)`
+    );
+
+    const out = new Uint8Array(outVoxels);
+    const reader = response.body?.getReader?.();
+    if (!reader) {
         const arrayBuffer = await response.arrayBuffer();
         const src = new Uint8Array(arrayBuffer);
-        const out = new Uint8Array(outZ * outY * outX);
         let oi = 0;
-        for (let z = 0; z < zSize; z += strideZ) {
+        for (let z = z0; z <= z1; z += strideZ) {
             const zOff = z * planeSize;
-            for (let y = 0; y < ySize; y += strideY) {
+            for (let y = y0; y <= y1; y += strideY) {
                 const rowOff = zOff + y * xSize;
-                for (let x = 0; x < xSize; x += strideX) {
+                for (let x = x0; x <= x1; x += strideX) {
                     out[oi++] = src[rowOff + x];
                 }
             }
         }
-        return { data: out, shape: [outZ, outY, outX], loadStride: [strideZ, strideY, strideX] };
+        return {
+            data: out.subarray(0, oi),
+            shape: [outZ, outY, outX],
+            loadStride: [strideZ, strideY, strideX],
+            cropOrigin: [z0, y0, x0]
+        };
     }
 
-    console.log(
-        `loadChannelData: streaming downsample ${zSize}×${ySize}×${xSize} → ${outZ}×${outY}×${outX} ` +
-        `(stride z,y,x=${strideZ},${strideY},${strideX})`
-    );
-
-    const out = new Uint8Array(outZ * outY * outX);
-    const reader = response.body.getReader();
     const plane = new Uint8Array(planeSize);
     let planeFilled = 0;
     let z = 0;
-    let outZi = 0;
     let leftover = new Uint8Array(0);
 
     const flushPlane = () => {
-        if (z % strideZ === 0) {
+        if (z >= z0 && z <= z1 && ((z - z0) % strideZ === 0)) {
+            const outZi = Math.floor((z - z0) / strideZ);
             let oi = outZi * outY * outX;
-            for (let y = 0; y < ySize; y += strideY) {
+            for (let y = y0; y <= y1; y += strideY) {
                 const rowOff = y * xSize;
-                for (let x = 0; x < xSize; x += strideX) {
+                for (let x = x0; x <= x1; x += strideX) {
                     out[oi++] = plane[rowOff + x];
                 }
             }
-            outZi += 1;
         }
         z += 1;
         planeFilled = 0;
@@ -142,18 +180,21 @@ async function readVolumeFromResponse(response, shape, strides) {
         if (offset < chunk.length) {
             leftover = chunk.subarray(offset);
         }
+
+        // Early exit once past crop in Z
+        if (z > z1) {
+            try { await reader.cancel(); } catch (_) { /* ignore */ }
+            break;
+        }
     }
 
-    if (planeFilled === planeSize && z < zSize) flushPlane();
-
-    if (outZi !== outZ) {
-        console.warn(`loadChannelData: expected ${outZ} output slices, got ${outZi}`);
-    }
+    if (planeFilled === planeSize && z < zSize && z <= z1) flushPlane();
 
     return {
-        data: out.subarray(0, outZi * outY * outX),
-        shape: [outZi, outY, outX],
-        loadStride: [strideZ, strideY, strideX]
+        data: out,
+        shape: [outZ, outY, outX],
+        loadStride: [strideZ, strideY, strideX],
+        cropOrigin: [z0, y0, x0]
     };
 }
 
@@ -169,10 +210,13 @@ export const loadChannelData = async (channelIndex, options = {}) => {
     if (channelIndex === undefined || channelIndex === null) return null;
 
     const basePath = options.basePath;
-    const cacheKey = getCacheKey(channelIndex, basePath);
-
-    if (globalChannelCache.has(cacheKey)) {
-        return globalChannelCache.get(cacheKey);
+    const cacheSuffix = options.cacheSuffix || '';
+    // Without a crop, we can hit the cache before fetching metadata.
+    if (!options.cropBounds) {
+        const cacheKey = getCacheKey(channelIndex, basePath, cacheSuffix);
+        if (globalChannelCache.has(cacheKey)) {
+            return globalChannelCache.get(cacheKey);
+        }
     }
 
     const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
@@ -202,9 +246,24 @@ export const loadChannelData = async (channelIndex, options = {}) => {
                 continue;
             }
 
-            const strides = chooseLoadStrides(shape, MAX_LOAD_VOXELS, dir);
+            const strides = options.strides || chooseLoadStrides(shape, MAX_LOAD_VOXELS, dir);
+            const cropBounds = options.cropBounds || null;
+            const cropKey = cropBounds
+                ? `crop:${Math.floor(cropBounds.min?.z)}:${Math.floor(cropBounds.min?.y)}:${Math.floor(cropBounds.min?.x)}:` +
+                  `${Math.ceil(cropBounds.max?.z)}:${Math.ceil(cropBounds.max?.y)}:${Math.ceil(cropBounds.max?.x)}:` +
+                  `${strides.strideZ}x${strides.strideY}x${strides.strideX}`
+                : '';
+            const effectiveSuffix = [cacheSuffix, cropKey].filter(Boolean).join('|');
+            const effectiveCacheKey = getCacheKey(channelIndex, basePath, effectiveSuffix);
+
+            if (globalChannelCache.has(effectiveCacheKey)) {
+                return globalChannelCache.get(effectiveCacheKey);
+            }
+
             console.log(
-                `loadChannelData: fetching ${path.data} shape=${shape.join('×')} strides=${JSON.stringify(strides)}`
+                `loadChannelData: fetching ${path.data} shape=${shape.join('×')} strides=${JSON.stringify(strides)}` +
+                (cropBounds ? ' [cropped]' : '') +
+                (effectiveSuffix ? ` cache=${effectiveSuffix}` : '')
             );
 
             const dataResponse = await fetch(path.data);
@@ -216,17 +275,18 @@ export const loadChannelData = async (channelIndex, options = {}) => {
             const dataContentType = dataResponse.headers.get('content-type');
             if (dataContentType && dataContentType.includes('text/html')) continue;
 
-            const loaded = await readVolumeFromResponse(dataResponse, shape, strides);
+            const loaded = await readVolumeFromResponse(dataResponse, shape, strides, cropBounds);
             const result = {
                 data: loaded.data,
                 metadata: {
                     ...metadata,
                     shape: loaded.shape,
                     originalShape: shape,
-                    loadStride: loaded.loadStride
+                    loadStride: loaded.loadStride,
+                    cropOrigin: loaded.cropOrigin || [0, 0, 0]
                 }
             };
-            globalChannelCache.set(cacheKey, result);
+            globalChannelCache.set(effectiveCacheKey, result);
             console.log(
                 `loadChannelData: ready channel ${channelIndex} (${basePath || dir}) ` +
                 `${loaded.shape.join('×')} = ${loaded.data.byteLength.toLocaleString()} bytes`

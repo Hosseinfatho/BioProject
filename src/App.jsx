@@ -6,14 +6,12 @@ import Main_View from './components/Main_View';
 import Local_View from './components/Local_View';
 import Graph_Pannel from './components/Graph_Pannel';
 import ROI from './components/ROI';
-import { useTheme } from './theme.jsx';
 import { useDataResolution } from './dataResolution.jsx';
-import bundledExampleScene from './presets/exampleScene.json';
+import ExampleLibraryModal from './components/ExampleLibraryModal';
 import {
   buildSceneSnapshot,
-  downloadSceneSnapshot,
-  saveSceneSnapshotLocal,
-  loadSceneSnapshotLocal
+  saveExampleScene,
+  deleteExampleScene
 } from './presets/scenePreset.js';
 
 // Helper function to convert RGB to hex
@@ -25,7 +23,6 @@ const rgbToHex = (r, g, b) => {
 };
 
 function App() {
-  const { colors } = useTheme();
   const { channelDataDir, resolution, setResolution } = useDataResolution();
   const [channels, setChannels] = useState([]);
   const [selectedRegions, setSelectedRegions] = useState([]);
@@ -34,6 +31,7 @@ function App() {
   const resolutionReadyRef = useRef(false);
   const mainViewRef = useRef(null);
   const exampleApplyTokenRef = useRef(0);
+  const [showExampleLibrary, setShowExampleLibrary] = useState(false);
 
   const [selectedRegionsData, setSelectedRegionsData] = useState([]);
   const [roiPositions, setRoiPositions] = useState([]);
@@ -66,6 +64,14 @@ function App() {
   useEffect(() => {
     mainHeightPctRef.current = mainHeightPct;
   }, [mainHeightPct]);
+
+  // Keep VTK / canvases sized to the full-bleed Main View
+  useEffect(() => {
+    const notify = () => window.dispatchEvent(new Event('resize'));
+    notify();
+    const t = setTimeout(notify, 100);
+    return () => clearTimeout(t);
+  }, [leftWidthPct, mainHeightPct]);
 
   useEffect(() => {
     if (!isResizingLeft) return undefined;
@@ -278,35 +284,29 @@ function App() {
     setPresetVersion((prev) => prev + 1);
   }, [channelDataDir]);
 
-  const handleSaveExample = useCallback(() => {
+  const handleSaveNamedExample = useCallback((name) => {
     const camera = mainViewRef.current?.getCameraState?.() || null;
     const snapshot = buildSceneSnapshot({
       resolution,
       channels,
       camera,
-      selections: selectedRegionsData
+      selections: selectedRegionsData,
+      name
     });
-    saveSceneSnapshotLocal(snapshot);
-    downloadSceneSnapshot(snapshot, 'exampleScene.json');
-    console.log('App: Example scene saved (download + localStorage)', snapshot);
-    window.alert(
-      'Scene saved.\n\n1) exampleScene.json downloaded\n2) Also stored in this browser\n\nNext: put that file into src/presets/exampleScene.json (enabled: true), then Example will load it for everyone.'
-    );
+    saveExampleScene(snapshot);
+    console.log('App: Example saved', snapshot.name, snapshot.id);
   }, [resolution, channels, selectedRegionsData]);
 
-  const handleLoadExample = useCallback(async () => {
-    const bundled = bundledExampleScene?.enabled ? bundledExampleScene : null;
-    const local = loadSceneSnapshotLocal();
-    const snapshot = bundled || local;
-    if (!snapshot) {
-      window.alert(
-        'No Example scene yet.\n\nArrange the view (channels, zoom, boxes, filters), then click Save Scene.'
-      );
-      return;
-    }
+  const handleDeleteExample = useCallback((id) => {
+    deleteExampleScene(id);
+    console.log('App: Example deleted', id);
+  }, []);
+
+  const handleLoadExampleSnapshot = useCallback(async (snapshot) => {
+    if (!snapshot) return;
 
     const token = ++exampleApplyTokenRef.current;
-    console.log('App: Loading Example scene', snapshot.name || snapshot);
+    console.log('App: Loading Example scene', snapshot.name || snapshot.id);
 
     if (snapshot.resolution && snapshot.resolution !== resolution) {
       setResolution(snapshot.resolution);
@@ -332,7 +332,6 @@ function App() {
     setChannels(nextChannels);
     setPresetVersion((v) => v + 1);
 
-    // Wait for Main View to load channel volumes, then restore camera + boxes
     const waitMs = snapshot.resolution === 'very' ? 8000 : snapshot.resolution === 'high' ? 4000 : 1500;
     await new Promise((r) => setTimeout(r, waitMs));
     if (token !== exampleApplyTokenRef.current) return;
@@ -347,80 +346,131 @@ function App() {
     if (boundsList.length) {
       await mainViewRef.current?.applyPresetSelections?.(boundsList);
     }
-    console.log('App: Example scene applied');
+    console.log('App: Example scene applied', snapshot.name);
   }, [resolution, setResolution]);
 
   return (
     <div style={{
-      display: 'flex',
-      flexDirection: 'column',
       width: '100vw',
       height: '100vh',
       overflow: 'hidden',
-      backgroundColor: colors.appBg,
-      color: colors.text,
+      backgroundColor: 'var(--app-bg)',
+      color: 'var(--text-color)',
       position: 'fixed',
       top: 0,
       left: 0,
       boxSizing: 'border-box'
     }}>
-      {/* Title ribbon — compact height */}
-      <div style={{ width: '100%', flexShrink: 0, overflow: 'hidden' }}>
-        <Title
-          softwareName="ConGAT: Context-aware graph attention network for 3D region of interest discovery in multiplexed microscopy images"
-          onLoadExample={handleLoadExample}
-          onSaveExample={handleSaveExample}
+      {/* Full-bleed Main View (whole screen) */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 0,
+          overflow: 'hidden'
+        }}
+      >
+        <Main_View
+          ref={mainViewRef}
+          channels={channels}
+          activeRegions={selectedRegions}
+          onSelectionChange={handleSelectionChange}
+          initialSelectionBounds={lastSelectionBoundsRef.current}
+          selectedRegionsData={selectedRegionsData}
+          roiBoxes={roiBoxes}
+          highlightedRoiIndex={highlightedRoiIndex}
+          onRoiHover={setHighlightedRoiIndex}
         />
       </div>
 
-      {/* Main Content Area */}
+      <ExampleLibraryModal
+        open={showExampleLibrary}
+        onClose={() => setShowExampleLibrary(false)}
+        onSave={handleSaveNamedExample}
+        onLoad={handleLoadExampleSnapshot}
+        onDelete={handleDeleteExample}
+      />
+
+      {/* Title — translucent */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 40,
+          overflow: 'hidden',
+          backdropFilter: 'blur(4px)',
+          WebkitBackdropFilter: 'blur(4px)',
+          pointerEvents: 'auto'
+        }}
+      >
+        <Title
+          softwareName="ConGAT: Context-aware graph attention network for 3D region of interest discovery in multiplexed microscopy images"
+          onOpenExampleLibrary={() => setShowExampleLibrary(true)}
+        />
+      </div>
+
+      {/* Layout chrome measure box (full area under title for % sizes) */}
       <div
         ref={mainRowRef}
         style={{
-          flex: 1,
-          width: '100%',
-          display: 'flex',
-          overflow: 'hidden',
-          boxSizing: 'border-box',
-          minHeight: 0
+          position: 'absolute',
+          top: '42px',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 2,
+          pointerEvents: 'none',
+          boxSizing: 'border-box'
         }}
       >
         {/* Left Sidebar — Channel / Region Selection */}
-        <div style={{
-          width: `${leftWidthPct}%`,
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          boxSizing: 'border-box',
-          flexShrink: 0,
-          minWidth: 0,
-          minHeight: 0
-        }}>
-          {/* Channel Selection — grows down until 60% then scrolls */}
-          <div style={{
-            width: '100%',
-            maxHeight: '60%',
-            overflowY: 'auto',
-            overflowX: 'hidden',
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            bottom: 0,
+            width: `${leftWidthPct}%`,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
             boxSizing: 'border-box',
-            flexShrink: 0,
-            minHeight: 0
-          }}>
+            pointerEvents: 'auto',
+            background: 'var(--overlay-tint)',
+            backdropFilter: 'blur(5px)',
+            WebkitBackdropFilter: 'blur(5px)',
+            borderRight: '1px solid var(--border-color)',
+            minWidth: 0
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxHeight: '60%',
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              boxSizing: 'border-box',
+              flexShrink: 0,
+              minHeight: 0
+            }}
+          >
             <ChannelSelection
               onChannelsChange={handleChannelsChange}
               presetChannels={channels}
               presetVersion={presetVersion}
             />
           </div>
-          {/* Region Selection — sits directly under Channel Selection */}
-          <div style={{
-            flex: 1,
-            width: '100%',
-            overflow: 'hidden',
-            boxSizing: 'border-box',
-            minHeight: 0
-          }}>
+          <div
+            style={{
+              flex: 1,
+              width: '100%',
+              overflow: 'hidden',
+              boxSizing: 'border-box',
+              minHeight: 0
+            }}
+          >
             <Region_Selection
               onToggleRegion={handleRegionToggle}
               selectedRegions={selectedRegions}
@@ -441,63 +491,43 @@ function App() {
             setIsResizingLeft(true);
           }}
           style={{
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            left: `calc(${leftWidthPct}% - 3px)`,
             width: '6px',
-            height: '100%',
-            flexShrink: 0,
             cursor: 'col-resize',
-            backgroundColor: isResizingLeft ? '#4CAF50' : colors.border,
+            pointerEvents: 'auto',
+            backgroundColor: isResizingLeft ? '#4CAF50' : 'rgba(76, 175, 80, 0.35)',
             transition: isResizingLeft ? 'none' : 'background-color 0.15s',
-            position: 'relative',
             zIndex: 5
           }}
           onMouseEnter={(e) => {
             if (!isResizingLeft) e.currentTarget.style.backgroundColor = '#4CAF50';
           }}
           onMouseLeave={(e) => {
-            if (!isResizingLeft) e.currentTarget.style.backgroundColor = colors.border;
+            if (!isResizingLeft) e.currentTarget.style.backgroundColor = 'rgba(76, 175, 80, 0.35)';
           }}
         />
 
-        {/* Right Section — Main View + bottom panels (fills remaining width) */}
+        {/* Right column measure for vertical resize */}
         <div
           ref={rightColumnRef}
           style={{
-            flex: 1,
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            boxSizing: 'border-box',
-            minWidth: 0,
-            minHeight: 0
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: `${leftWidthPct}%`,
+            pointerEvents: 'none',
+            boxSizing: 'border-box'
           }}
         >
-          {/* Main View — resizable height */}
-          <div style={{
-            height: `${mainHeightPct}%`,
-            width: '100%',
-            overflow: 'hidden',
-            boxSizing: 'border-box',
-            flexShrink: 0,
-            minHeight: 0
-          }}>
-            <Main_View
-              ref={mainViewRef}
-              channels={channels}
-              activeRegions={selectedRegions}
-              onSelectionChange={handleSelectionChange}
-              initialSelectionBounds={lastSelectionBoundsRef.current}
-              selectedRegionsData={selectedRegionsData}
-              roiBoxes={roiBoxes}
-              onRoiHover={setHighlightedRoiIndex}
-            />
-          </div>
-
-          {/* Drag handle — resize Main View height */}
+          {/* Horizontal resize handle */}
           <div
             role="separator"
             aria-orientation="horizontal"
-            aria-label="Resize main view height"
+            aria-label="Resize bottom panels height"
             aria-valuemin={35}
             aria-valuemax={85}
             aria-valuenow={Math.round(mainHeightPct)}
@@ -506,69 +536,86 @@ function App() {
               setIsResizingMain(true);
             }}
             style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              top: `calc(${mainHeightPct}% - 3px)`,
               height: '6px',
-              width: '100%',
-              flexShrink: 0,
               cursor: 'row-resize',
-              backgroundColor: isResizingMain ? '#4CAF50' : colors.border,
+              pointerEvents: 'auto',
+              backgroundColor: isResizingMain ? '#4CAF50' : 'rgba(76, 175, 80, 0.35)',
               transition: isResizingMain ? 'none' : 'background-color 0.15s',
-              position: 'relative',
               zIndex: 5
             }}
             onMouseEnter={(e) => {
               if (!isResizingMain) e.currentTarget.style.backgroundColor = '#4CAF50';
             }}
             onMouseLeave={(e) => {
-              if (!isResizingMain) e.currentTarget.style.backgroundColor = colors.border;
+              if (!isResizingMain) e.currentTarget.style.backgroundColor = 'rgba(76, 175, 80, 0.35)';
             }}
           />
 
-          {/* Bottom panels — Local / Graph / ROI (fills remaining height) */}
-          <div style={{
-            flex: 1,
-            width: '100%',
-            display: 'flex',
-            overflow: 'hidden',
-            boxSizing: 'border-box',
-            minHeight: 0
-          }}>
-            {/* Local View */}
-            <div style={{
-              flex: 1,
-              height: '100%',
+          {/* Bottom panels — Local / Graph / ROI */}
+          <div
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              top: `${mainHeightPct}%`,
+              display: 'flex',
               overflow: 'hidden',
               boxSizing: 'border-box',
-              minWidth: 0
-            }}>
-              <Local_View 
-                selectedRegionsData={selectedRegionsData} 
+              pointerEvents: 'auto',
+              background: 'var(--overlay-tint)',
+              backdropFilter: 'blur(5px)',
+              WebkitBackdropFilter: 'blur(5px)',
+              borderTop: '1px solid var(--border-color)',
+              minHeight: 0
+            }}
+          >
+            <div
+              style={{
+                flex: 1,
+                height: '100%',
+                overflow: 'hidden',
+                boxSizing: 'border-box',
+                minWidth: 0,
+                borderRight: '1px solid var(--border-color)'
+              }}
+            >
+              <Local_View
+                selectedRegionsData={selectedRegionsData}
                 channels={channels}
                 onRegionRemove={handleRegionRemove}
               />
             </div>
-            {/* Graph Panel */}
-            <div style={{
-              flex: 1,
-              height: '100%',
-              overflow: 'hidden',
-              boxSizing: 'border-box',
-              minWidth: 0
-            }}>
-              <Graph_Pannel 
-                key={selectedRegionsData.map(r => r.id).join('-') || 'empty'} 
-                selectedRegionsData={selectedRegionsData} 
-                channels={channels} 
+            <div
+              style={{
+                flex: 1,
+                height: '100%',
+                overflow: 'hidden',
+                boxSizing: 'border-box',
+                minWidth: 0,
+                borderRight: '1px solid var(--border-color)'
+              }}
+            >
+              <Graph_Pannel
+                key={selectedRegionsData.map((r) => r.id).join('-') || 'empty'}
+                selectedRegionsData={selectedRegionsData}
+                channels={channels}
                 selectedRegions={selectedRegions}
               />
             </div>
-            {/* Direction View */}
-            <div style={{
-              flex: 1,
-              height: '100%',
-              overflow: 'hidden',
-              boxSizing: 'border-box',
-              minWidth: 0
-            }}>
+            <div
+              style={{
+                flex: 1,
+                height: '100%',
+                overflow: 'hidden',
+                boxSizing: 'border-box',
+                minWidth: 0
+              }}
+            >
               <ROI
                 onPositionsChange={setRoiPositions}
                 onRoiBoxChange={setRoiBoxes}

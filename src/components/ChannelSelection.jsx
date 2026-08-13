@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import channelNamesData from '../channel_names.json';
 import { CONFIG } from '../config';
 import { useDataResolution } from '../dataResolution.jsx';
+import { useTheme } from '../theme.jsx';
 
 // Generate channel options (0-69 based on data shape)
 const CHANNEL_COUNT = 70;
@@ -20,6 +21,7 @@ const rgbToHex = (r, g, b) => {
 
 const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion = 0 }) => {
   const { channelDataDir, resolution, setResolution } = useDataResolution();
+  const { isLight, colors } = useTheme();
   const [channels, setChannels] = useState([]);
   const presetVersionRef = useRef(null);
   const presetChannelsRef = useRef(presetChannels);
@@ -495,7 +497,7 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
     <div style={{
       height: 'auto',
       width: '100%',
-      backgroundColor: 'var(--panel-bg, #000000)',
+      backgroundColor: 'transparent',
       border: '1px solid var(--border-color, #444)',
       borderBottom: 'none',
       padding: '1px',
@@ -516,7 +518,9 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
         padding: '8px 12px',
         backgroundColor: 'var(--header-bg, #333333)',
         borderBottom: '1px solid var(--border-color, #444)',
-        flexShrink: 0
+        flexShrink: 0,
+        backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)'
       }}>
         <h3 style={{ margin: 0, fontSize: '16px', color: 'var(--text-color, white)', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
           Channel Selection
@@ -525,12 +529,12 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
             onClick={() => setShowHelp(!showHelp)}
             style={{
               background: 'transparent',
-              border: '1px solid rgba(255, 255, 255, 0.3)',
+              border: `1px solid ${isLight ? 'rgba(0, 0, 0, 0.28)' : 'rgba(255, 255, 255, 0.3)'}`,
               borderRadius: '50%',
               width: '18px',
               height: '18px',
               cursor: 'pointer',
-              color: '#fff',
+              color: colors.text,
               fontSize: '11px',
               display: 'flex',
               alignItems: 'center',
@@ -540,12 +544,12 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
               flexShrink: 0
             }}
             onMouseEnter={(e) => {
-              e.target.style.background = 'rgba(255, 255, 255, 0.1)';
-              e.target.style.borderColor = 'rgba(255, 255, 255, 0.5)';
+              e.target.style.background = isLight ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.1)';
+              e.target.style.borderColor = isLight ? 'rgba(0, 0, 0, 0.45)' : 'rgba(255, 255, 255, 0.5)';
             }}
             onMouseLeave={(e) => {
               e.target.style.background = 'transparent';
-              e.target.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+              e.target.style.borderColor = isLight ? 'rgba(0, 0, 0, 0.28)' : 'rgba(255, 255, 255, 0.3)';
             }}
             title="Show channel selection help"
           >
@@ -565,7 +569,7 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
             border: '1px solid var(--border-strong, #666)',
             overflow: 'hidden',
             flexShrink: 0,
-            background: 'rgba(0,0,0,0.25)'
+            background: 'var(--header-control-bg, rgba(0,0,0,0.25))'
           }}
         >
           {[
@@ -606,7 +610,7 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
       {/* Help Panel - Black & Green Theme */}
       {showHelp && (
         <div style={{
-          background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.95) 0%, rgba(20, 40, 20, 0.95) 100%)',
+          background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.45) 0%, rgba(20, 40, 20, 0.4) 100%)',
           border: '1px solid rgba(74, 222, 128, 0.5)',
           borderRadius: '12px',
           padding: '16px 18px',
@@ -750,9 +754,9 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
                 gap: '10px',
                 marginBottom: '10px',
                 padding: '6px',
-                backgroundColor: '#1a1a1a',
+                backgroundColor: 'var(--row-bg, #1a1a1a)',
                 borderRadius: '4px',
-                border: '1px solid #444'
+                border: '1px solid var(--border-color, #444)'
               }}
             >
               {/* Visibility Checkbox */}
@@ -791,9 +795,9 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
                 onChange={(e) => updateChannel(channel.id, 'channelIndex', parseInt(e.target.value))}
                 style={{
                   padding: '5px 8px',
-                  backgroundColor: '#2a2a2a',
-                  color: 'white',
-                  border: '1px solid #555',
+                  backgroundColor: 'var(--row-alt-bg, #2a2a2a)',
+                  color: 'var(--text-color, white)',
+                  border: '1px solid var(--border-strong, #555)',
                   borderRadius: '4px',
                   fontSize: '11px',
                   minWidth: '100px',
@@ -926,7 +930,7 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
                           position: 'absolute',
                           width: '100%',
                           height: '5px',
-                          backgroundColor: '#555',
+                          backgroundColor: 'var(--border-strong, #555)',
                           borderRadius: '3px',
                           zIndex: 0
                         }} />

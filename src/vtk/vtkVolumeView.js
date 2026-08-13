@@ -1,0 +1,618 @@
+/**
+ * Shared VTK.js volume view for Local + Main.
+ * One VolumeMapper + Volume per channel (stable multi-volume overlay).
+ */
+import '@kitware/vtk.js/Rendering/Profiles/Volume';
+import '@kitware/vtk.js/Rendering/Profiles/Geometry';
+
+import vtkGenericRenderWindow from '@kitware/vtk.js/Rendering/Misc/GenericRenderWindow';
+import vtkImageData from '@kitware/vtk.js/Common/DataModel/ImageData';
+import vtkDataArray from '@kitware/vtk.js/Common/Core/DataArray';
+import vtkVolume from '@kitware/vtk.js/Rendering/Core/Volume';
+import vtkVolumeMapper from '@kitware/vtk.js/Rendering/Core/VolumeMapper';
+import vtkVolumeProperty from '@kitware/vtk.js/Rendering/Core/VolumeProperty';
+import vtkColorTransferFunction from '@kitware/vtk.js/Rendering/Core/ColorTransferFunction';
+import vtkPiecewiseFunction from '@kitware/vtk.js/Common/DataModel/PiecewiseFunction';
+import vtkInteractorStyleTrackballCamera from '@kitware/vtk.js/Interaction/Style/InteractorStyleTrackballCamera';
+import vtkCubeSource from '@kitware/vtk.js/Filters/Sources/CubeSource';
+import vtkMapper from '@kitware/vtk.js/Rendering/Core/Mapper';
+import vtkActor from '@kitware/vtk.js/Rendering/Core/Actor';
+
+const DEFAULT_MAX_VOXELS = 40_000_000;
+
+const hexToRgb = (hex) => {
+  const h = String(hex || '#ffffff').replace('#', '');
+  return {
+    r: parseInt(h.slice(0, 2), 16) / 255,
+    g: parseInt(h.slice(2, 4), 16) / 255,
+    b: parseInt(h.slice(4, 6), 16) / 255
+  };
+};
+
+const thresholdToUint8 = (threshold, dataMin, dataMax) => {
+  const span = Math.max(1e-6, dataMax - dataMin);
+  return Math.max(0, Math.min(255, ((threshold - dataMin) / span) * 255));
+};
+
+const parseBgColor = (hex) => {
+  const h = String(hex || '#000000').replace('#', '');
+  const n = parseInt(h, 16);
+  return [
+    ((n >> 16) & 255) / 255,
+    ((n >> 8) & 255) / 255,
+    (n & 255) / 255
+  ];
+};
+
+/** Downsample Uint8 [z][y][x] → { values, dims:[x,y,z], stride }.
+ * Uses max-pooling so bright structures survive when stride > 1.
+ * When under the cap, returns the original buffer (no copy / no loss).
+ */
+export function prepareVolumeScalars(data, shapeZYX, maxVoxels = DEFAULT_MAX_VOXELS) {
+  const [zSize, ySize, xSize] = shapeZYX.map(Number);
+  const total = zSize * ySize * xSize;
+  let stride = 1;
+  if (Number.isFinite(maxVoxels) && maxVoxels > 0 && total > maxVoxels) {
+    stride = Math.max(1, Math.ceil(Math.cbrt(total / maxVoxels)));
+  }
+
+  if (stride === 1) {
+    return { values: data, dims: [xSize, ySize, zSize], stride: 1 };
+  }
+
+  const dz = Math.ceil(zSize / stride);
+  const dy = Math.ceil(ySize / stride);
+  const dx = Math.ceil(xSize / stride);
+  const out = new Uint8Array(dx * dy * dz);
+  const plane = ySize * xSize;
+
+  let o = 0;
+  for (let z = 0; z < zSize; z += stride) {
+    const zEnd = Math.min(zSize, z + stride);
+    for (let y = 0; y < ySize; y += stride) {
+      const yEnd = Math.min(ySize, y + stride);
+      for (let x = 0; x < xSize; x += stride) {
+        const xEnd = Math.min(xSize, x + stride);
+        let peak = 0;
+        for (let zz = z; zz < zEnd; zz++) {
+          const zOff = zz * plane;
+          for (let yy = y; yy < yEnd; yy++) {
+            const row = zOff + yy * xSize;
+            for (let xx = x; xx < xEnd; xx++) {
+              const v = data[row + xx];
+              if (v > peak) peak = v;
+            }
+          }
+        }
+        out[o++] = peak;
+      }
+    }
+  }
+
+  return { values: out, dims: [dx, dy, dz], stride };
+}
+
+/**
+ * Local-style ImageData: origin 0, spacing [1,1,0.25].
+ */
+export function createImageDataLocal(values, dimsXYZ, spacing = [1, 1, 0.25]) {
+  const [dx, dy, dz] = dimsXYZ;
+  if (!dx || !dy || !dz || !values?.length) {
+    throw new Error(`Invalid volume dims/values: ${dx}×${dy}×${dz}`);
+  }
+
+  const imageData = vtkImageData.newInstance();
+  imageData.setExtent(0, dx - 1, 0, dy - 1, 0, dz - 1);
+  imageData.setSpacing(spacing[0], spacing[1], spacing[2]);
+  imageData.setOrigin(0, 0, 0);
+  imageData.getPointData().setScalars(
+    vtkDataArray.newInstance({
+      name: 'scalars',
+      numberOfComponents: 1,
+      values,
+      dataType: 'Uint8Array'
+    })
+  );
+  imageData.modified();
+  return imageData;
+}
+
+/**
+ * Main-scene ImageData placed in the same world box as Three.js voxels:
+ * X/Y/Z ∈ [-scale, +scale] with scaleZ compressed by 4.
+ * shapeZYX = loaded buffer shape (used for aspect).
+ */
+export function createImageDataWorld(values, dimsXYZ, shapeZYX) {
+  const [zSize, ySize, xSize] = shapeZYX.map(Number);
+  const [dx, dy, dz] = dimsXYZ;
+  const maxDim = Math.max(zSize, ySize, xSize);
+  const scaleX = xSize / maxDim;
+  const scaleY = ySize / maxDim;
+  const scaleZ = (zSize / maxDim) / 4;
+
+  const spacing = [(2 * scaleX) / dx, (2 * scaleY) / dy, (2 * scaleZ) / dz];
+  const origin = [-scaleX, -scaleY, -scaleZ];
+
+  const imageData = vtkImageData.newInstance();
+  imageData.setExtent(0, dx - 1, 0, dy - 1, 0, dz - 1);
+  imageData.setSpacing(spacing[0], spacing[1], spacing[2]);
+  imageData.setOrigin(origin[0], origin[1], origin[2]);
+  imageData.getPointData().setScalars(
+    vtkDataArray.newInstance({
+      name: 'scalars',
+      numberOfComponents: 1,
+      values,
+      dataType: 'Uint8Array'
+    })
+  );
+  imageData.modified();
+  return imageData;
+}
+
+export function buildVolumeProperty(channelConfig, metadata, lightMode = false, opacityUnitDistance = 1) {
+  const dataRange = metadata?.dataRange || [0, 65535];
+  const dataMin = dataRange[0];
+  const dataMax = dataRange[1];
+  const rangeSpan = Math.max(1, dataMax - dataMin);
+  const autoMin = dataMin + rangeSpan * 0.03;
+  const autoMax = dataMin + rangeSpan * 0.9;
+
+  let tMin = channelConfig.thresholdMin !== undefined ? channelConfig.thresholdMin : autoMin;
+  let tMax = channelConfig.thresholdMax !== undefined ? channelConfig.thresholdMax : autoMax;
+  if (tMin > tMax) [tMin, tMax] = [tMax, tMin];
+  tMin = Math.max(dataMin, Math.min(dataMax, tMin));
+  tMax = Math.max(dataMin, Math.min(dataMax, tMax));
+
+  const uMin = thresholdToUint8(tMin, dataMin, dataMax);
+  const uMax = Math.max(uMin + 1, thresholdToUint8(tMax, dataMin, dataMax));
+  const { r, g, b } = hexToRgb(channelConfig.color);
+
+  const ctf = vtkColorTransferFunction.newInstance();
+  ctf.addRGBPoint(0, 0, 0, 0);
+  ctf.addRGBPoint(Math.max(0, uMin - 0.5), 0, 0, 0);
+  ctf.addRGBPoint(uMin, r, g, b);
+  ctf.addRGBPoint(255, r, g, b);
+
+  const otf = vtkPiecewiseFunction.newInstance();
+  // Steeper opacity = less foggy / “filtered” look; closer to Local crispness.
+  otf.addPoint(0, 0);
+  otf.addPoint(Math.max(0, uMin - 0.5), 0);
+  otf.addPoint(uMin, 0);
+  otf.addPoint(uMin + Math.max(1, (uMax - uMin) * 0.05), lightMode ? 0.45 : 0.35);
+  otf.addPoint(uMin + (uMax - uMin) * 0.25, lightMode ? 0.85 : 0.75);
+  otf.addPoint(uMax, 1.0);
+  otf.addPoint(255, 1.0);
+
+  const prop = vtkVolumeProperty.newInstance();
+  prop.setIndependentComponents(false);
+  prop.setRGBTransferFunction(0, ctf);
+  prop.setScalarOpacity(0, otf);
+  // Smaller unit distance → denser optical depth (more detail, less washed-out).
+  prop.setScalarOpacityUnitDistance(0, Math.max(opacityUnitDistance, 1e-4));
+  prop.setInterpolationTypeToLinear();
+  if (typeof prop.setPreferSizeOverAccuracy === 'function') {
+    prop.setPreferSizeOverAccuracy(false);
+  }
+  prop.setShade(false);
+  prop.setAmbient(1.0);
+  prop.setDiffuse(0.0);
+  prop.setSpecular(0);
+  return prop;
+}
+
+export function estimateActiveVoxels(data, shapeZYX, channelConfig, metadata) {
+  const [zSize, ySize, xSize] = shapeZYX.map(Number);
+  const dataRange = metadata?.dataRange || [0, 65535];
+  const dataMin = dataRange[0];
+  const dataMax = dataRange[1];
+  let tMin = channelConfig.thresholdMin !== undefined ? channelConfig.thresholdMin : dataMin;
+  let tMax = channelConfig.thresholdMax !== undefined ? channelConfig.thresholdMax : dataMax;
+  if (tMin > tMax) [tMin, tMax] = [tMax, tMin];
+
+  const step = Math.max(1, Math.floor(Math.cbrt((zSize * ySize * xSize) / 250000)));
+  let hit = 0;
+  for (let z = 0; z < zSize; z += step) {
+    for (let y = 0; y < ySize; y += step) {
+      for (let x = 0; x < xSize; x += step) {
+        const v = data[z * ySize * xSize + y * xSize + x];
+        const actual = (v / 255) * (dataMax - dataMin) + dataMin;
+        if (actual >= tMin && actual <= tMax) hit++;
+      }
+    }
+  }
+  return Math.round(hit * step * step * step);
+}
+
+const disposeBundle = (bundle, renderer) => {
+  if (!bundle) return;
+  try {
+    renderer.removeVolume(bundle.volume);
+  } catch (_) { /* */ }
+  try {
+    bundle.volume?.delete?.();
+  } catch (_) { /* */ }
+  try {
+    bundle.mapper?.delete?.();
+  } catch (_) { /* */ }
+  try {
+    bundle.prop?.getRGBTransferFunction(0)?.delete?.();
+    bundle.prop?.getScalarOpacity(0)?.delete?.();
+    bundle.prop?.delete?.();
+  } catch (_) { /* */ }
+  try {
+    bundle.imageData?.delete?.();
+  } catch (_) { /* */ }
+};
+
+/**
+ * @param {HTMLElement} container
+ * @param {{
+ *   interactive?: boolean,
+ *   maxVoxels?: number,
+ *   sampleDistance?: number,
+ *   worldSpace?: boolean
+ * }} options
+ */
+export function createVtkVolumeView(container, options = {}) {
+  const {
+    interactive = true,
+    maxVoxels = DEFAULT_MAX_VOXELS,
+    sampleDistance = 0.7,
+    worldSpace = false
+  } = options;
+
+  const grw = vtkGenericRenderWindow.newInstance({ background: [0, 0, 0] });
+  // Ensure the host fills the panel — zero-size canvas renders nothing.
+  if (container && container.style) {
+    container.style.width = '100%';
+    container.style.height = '100%';
+    container.style.position = container.style.position || 'absolute';
+  }
+  grw.setContainer(container);
+  grw.resize();
+
+  const renderer = grw.getRenderer();
+  const renderWindow = grw.getRenderWindow();
+  const interactor = grw.getInteractor();
+
+  if (interactive) {
+    interactor.setInteractorStyle(vtkInteractorStyleTrackballCamera.newInstance());
+  } else {
+    // Main View drives camera from Three.js mouse handlers.
+    try {
+      interactor.unbindEvents();
+    } catch (_) { /* */ }
+  }
+
+  const setInteractive = (enabled) => {
+    try {
+      if (enabled) {
+        if (typeof interactor.enable === 'function') interactor.enable();
+        interactor.setInteractorStyle(vtkInteractorStyleTrackballCamera.newInstance());
+        if (typeof interactor.bindEvents === 'function') {
+          interactor.bindEvents(container);
+        }
+      } else {
+        // Freeze camera while user draws a 3D selection box.
+        if (typeof interactor.disable === 'function') interactor.disable();
+        else if (typeof interactor.unbindEvents === 'function') interactor.unbindEvents();
+      }
+    } catch (err) {
+      console.warn('VTK setInteractive failed:', err);
+    }
+  };
+
+  // Style VTK canvas under the Three overlay
+  try {
+    const canvas = container.querySelector('canvas');
+    if (canvas) {
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+      canvas.style.display = 'block';
+    }
+  } catch (_) { /* */ }
+
+  /** @type {Map<string, any>} */
+  const volumesByKey = new Map();
+  /** @type {Map<string, any>} */
+  const boxesByKey = new Map();
+
+  const getCanvas = () => container?.querySelector?.('canvas') || null;
+
+  const removeWireframeBox = (id) => {
+    const box = boxesByKey.get(id);
+    if (!box) return;
+    try {
+      renderer.removeActor(box.actor);
+    } catch (_) { /* */ }
+    try {
+      box.actor?.delete?.();
+      box.mapper?.delete?.();
+      box.source?.delete?.();
+    } catch (_) { /* */ }
+    boxesByKey.delete(id);
+  };
+
+  const clearWireframeBoxes = () => {
+    Array.from(boxesByKey.keys()).forEach(removeWireframeBox);
+  };
+
+  /**
+   * World-space wireframe box (selection / ROI) in the same VTK scene as volumes.
+   * @param {string} id
+   * @param {{ x:number, y:number, z:number }} center
+   * @param {{ x:number, y:number, z:number }} size
+   * @param {string} colorHex
+   */
+  const setWireframeBox = (id, center, size, colorHex = '#ffffff') => {
+    if (!center || !size) return;
+    removeWireframeBox(id);
+    const { r, g, b } = hexToRgb(colorHex);
+    const source = vtkCubeSource.newInstance({
+      xLength: Math.max(1e-4, Math.abs(size.x)),
+      yLength: Math.max(1e-4, Math.abs(size.y)),
+      zLength: Math.max(1e-4, Math.abs(size.z)),
+      center: [center.x, center.y, center.z]
+    });
+    const mapper = vtkMapper.newInstance();
+    mapper.setInputConnection(source.getOutputPort());
+    const actor = vtkActor.newInstance();
+    actor.setMapper(mapper);
+    const prop = actor.getProperty();
+    prop.setRepresentationToWireframe();
+    prop.setColor(r, g, b);
+    prop.setOpacity(1);
+    prop.setLineWidth(3);
+    prop.setLighting(false);
+    if (typeof actor.setVisibility === 'function') actor.setVisibility(true);
+    renderer.addActor(actor);
+    boxesByKey.set(id, { actor, mapper, source });
+  };
+
+  const render = () => {
+    try {
+      const canvas = getCanvas();
+      if (canvas?.isContextLost?.()) return;
+      renderWindow.render();
+    } catch (_) { /* ignore lost-context renders */ }
+  };
+
+  const removeChannel = (key) => {
+    const bundle = volumesByKey.get(key);
+    if (!bundle) return;
+    disposeBundle(bundle, renderer);
+    volumesByKey.delete(key);
+  };
+
+  const clearVolumes = () => {
+    Array.from(volumesByKey.keys()).forEach(removeChannel);
+  };
+
+  /**
+   * Add or replace a channel volume.
+   * @param {string} key
+   * @param {{ data: Uint8Array, metadata: object }} channelData
+   * @param {object} channelConfig
+   * @param {{ lightMode?: boolean }} opts
+   */
+  const upsertChannel = (key, channelData, channelConfig, opts = {}) => {
+    if (!channelData?.data || !channelData?.metadata?.shape) return false;
+    const shape = channelData.metadata.shape.map(Number);
+    const { values, dims, stride } = prepareVolumeScalars(
+      channelData.data,
+      shape,
+      opts.maxVoxels != null ? opts.maxVoxels : maxVoxels
+    );
+
+    const imageData = worldSpace
+      ? createImageDataWorld(values, dims, shape)
+      : createImageDataLocal(values, dims);
+
+    removeChannel(key);
+
+    const mapper = vtkVolumeMapper.newInstance();
+    mapper.setInputData(imageData);
+    // sampleDistance is in WORLD units. Keep steps within maxSamplesPerRay
+    // so VTK does not clip rays (and spam console warnings).
+    const sp = imageData.getSpacing();
+    const voxelStep = Math.min(sp[0], sp[1], sp[2]) || 0.01;
+    const quality = opts.quality === 'high' ? 0.25 : opts.quality === 'medium' ? 0.4 : 0.5;
+    let sd = worldSpace
+      ? Math.max(voxelStep * quality, 0.0002)
+      : Math.min(sampleDistance, Math.max(voxelStep * quality, 0.05));
+    const extentDiag = Math.hypot(sp[0] * dims[0], sp[1] * dims[1], sp[2] * dims[2]);
+    // Keep ray samples modest — huge caps + many volumes blow the WebGL context.
+    const maxSamples = opts.quality === 'high' ? 16000 : 8000;
+    const minSdForBudget = extentDiag / Math.max(1, maxSamples - 64);
+    if (sd < minSdForBudget) sd = minSdForBudget;
+    mapper.setSampleDistance(sd);
+    if (typeof mapper.setMaximumSamplesPerRay === 'function') {
+      mapper.setMaximumSamplesPerRay(maxSamples);
+    }
+    mapper.setBlendModeToComposite();
+
+    const volume = vtkVolume.newInstance();
+    volume.setMapper(mapper);
+
+    // Tighter opacity unit distance keeps thin structures from washing out.
+    const prop = buildVolumeProperty(
+      channelConfig,
+      channelData.metadata,
+      Boolean(opts.lightMode),
+      voxelStep * (opts.quality === 'high' ? 0.75 : 1.0)
+    );
+    volume.setProperty(prop);
+
+    const visible = channelConfig.visible !== false;
+    volume.setVisibility(visible);
+    renderer.addVolume(volume);
+    renderer.resetCameraClippingRange();
+
+    volumesByKey.set(key, {
+      volume,
+      mapper,
+      prop,
+      imageData,
+      stride,
+      channelConfig: { ...channelConfig },
+      metadata: channelData.metadata,
+      opacityUnitDistance: voxelStep * (opts.quality === 'high' ? 0.75 : 1.0),
+      configSignature: null
+    });
+
+    console.log(
+      `VTK: upsert channel key=${key} shape=${shape.join('×')} → dims=${dims.join('×')} ` +
+      `stride=${stride} sampleDist=${sd.toFixed(5)} world=${worldSpace}`
+    );
+    return true;
+  };
+
+  /** Update TF / colors without rebuilding GPU volume textures (safe for Day/Night). */
+  const updateChannelAppearance = (key, channelConfig, opts = {}) => {
+    const bundle = volumesByKey.get(key);
+    if (!bundle?.volume) return false;
+    const cfg = channelConfig || bundle.channelConfig;
+    const meta = bundle.metadata;
+    if (!cfg || !meta) return false;
+    const nextProp = buildVolumeProperty(
+      cfg,
+      meta,
+      Boolean(opts.lightMode),
+      opts.opacityUnitDistance != null ? opts.opacityUnitDistance : (bundle.opacityUnitDistance || 1)
+    );
+    try {
+      bundle.prop?.delete?.();
+    } catch (_) { /* */ }
+    bundle.volume.setProperty(nextProp);
+    bundle.prop = nextProp;
+    bundle.channelConfig = { ...cfg };
+    return true;
+  };
+
+  const updateAllAppearances = (opts = {}) => {
+    volumesByKey.forEach((_bundle, key) => {
+      updateChannelAppearance(key, null, opts);
+    });
+    render();
+  };
+
+  const setChannelVisible = (key, visible) => {
+    const bundle = volumesByKey.get(key);
+    if (!bundle) return;
+    bundle.volume.setVisibility(Boolean(visible));
+  };
+
+  const hasChannel = (key) => volumesByKey.has(key);
+
+  const setBackground = (hex) => {
+    renderer.setBackground(...parseBgColor(hex));
+  };
+
+  const resize = () => {
+    grw.resize();
+  };
+
+  /**
+   * Sync VTK camera to Main_View orbit state (same math as Three updateCameraPosition).
+   */
+  const syncOrbitCamera = (state, { fov = 75, aspect = 1, near = 0.1, far = 1000 } = {}) => {
+    const cam = renderer.getActiveCamera();
+    if (!cam || !state) return;
+
+    const lookX = state.panOffset?.x || 0;
+    const lookY = state.panOffset?.y || 0;
+    const lookZ = state.panOffset?.z || 0;
+    const radius = state.distance || 1;
+    const theta = state.rotation?.y || 0;
+    const phi = state.rotation?.x || 0;
+
+    const px = lookX + radius * Math.sin(theta) * Math.cos(phi);
+    const py = lookY + radius * Math.sin(phi);
+    const pz = lookZ + radius * Math.cos(theta) * Math.cos(phi);
+
+    cam.setParallelProjection(false);
+    cam.setViewAngle(fov);
+    // Keep near plane small so close zooms don't clip the volume slab.
+    const nearPlane = Math.max(0.001, Math.min(near, radius * 0.01));
+    const farPlane = Math.max(far, radius * 20, 10);
+    cam.setClippingRange(nearPlane, farPlane);
+    cam.setPosition(px, py, pz);
+    cam.setFocalPoint(lookX, lookY, lookZ);
+    cam.setViewUp(0, 1, 0);
+    if (typeof cam.modified === 'function') cam.modified();
+    renderer.resetCameraClippingRange();
+  };
+
+  const resetCamera = () => {
+    renderer.resetCamera();
+    renderer.resetCameraClippingRange();
+    render();
+  };
+
+  /**
+   * Local View convenience: replace all volumes at once.
+   */
+  const setChannelVolumes = (channelVolumes, opts = {}) => {
+    clearVolumes();
+    (channelVolumes || []).forEach((cv, i) => {
+      const key = String(cv.channelConfig?.channelIndex ?? i);
+      upsertChannel(
+        key,
+        { data: cv.data, metadata: cv.metadata },
+        cv.channelConfig,
+        opts
+      );
+    });
+    if (!worldSpace) {
+      renderer.resetCamera();
+      const cam = renderer.getActiveCamera();
+      cam.elevation(20);
+      cam.azimuth(30);
+      cam.orthogonalizeViewUp();
+      renderer.resetCameraClippingRange();
+    }
+    render();
+  };
+
+  const deleteView = () => {
+    clearWireframeBoxes();
+    clearVolumes();
+    try {
+      grw.delete();
+    } catch (_) { /* */ }
+  };
+
+  return {
+    upsertChannel,
+    updateChannelAppearance,
+    updateAllAppearances,
+    removeChannel,
+    setChannelVisible,
+    hasChannel,
+    clearVolumes,
+    setChannelVolumes,
+    setWireframeBox,
+    removeWireframeBox,
+    clearWireframeBoxes,
+    setBackground,
+    resize,
+    render,
+    syncOrbitCamera,
+    resetCamera,
+    getCanvas,
+    setInteractive,
+    delete: deleteView,
+    getRenderWindow: () => renderWindow,
+    getRenderer: () => renderer
+  };
+}
+
+/** Back-compat alias used by Local_View. */
+export function createLocalVtkView(container) {
+  return createVtkVolumeView(container, {
+    interactive: true,
+    maxVoxels: DEFAULT_MAX_VOXELS,
+    sampleDistance: 0.5,
+    worldSpace: false
+  });
+}

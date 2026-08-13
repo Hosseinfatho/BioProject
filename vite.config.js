@@ -117,10 +117,10 @@ export default defineConfig({
     }
   },
   optimizeDeps: {
-    include: ['three']
+    include: ['three', '@kitware/vtk.js']
   },
   build: {
-    // Improve build performance
-    chunkSizeWarningLimit: 1000
+    // VTK.js is large; raise warning threshold
+    chunkSizeWarningLimit: 5000
   }
 })
