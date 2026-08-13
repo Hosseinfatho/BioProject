@@ -165,38 +165,53 @@ export function buildVolumeProperty(channelConfig, metadata, lightMode = false, 
 
   const uMin = thresholdToUint8(tMin, dataMin, dataMax);
   const uMax = Math.max(uMin + 1, thresholdToUint8(tMax, dataMin, dataMax));
+  const span = Math.max(1, uMax - uMin);
   const { r, g, b } = hexToRgb(channelConfig.color);
+  // Channel opacity (0–1) scales the whole opacity TF → glassy / see-through control
+  const opacityScale = Math.max(0, Math.min(1, Number(channelConfig.opacity ?? 1)));
 
   const ctf = vtkColorTransferFunction.newInstance();
+  // Bright channel color with a soft highlight (avoid dark midtones)
+  const lift = (c, m, add = 0) => Math.min(1, c * m + add);
   ctf.addRGBPoint(0, 0, 0, 0);
   ctf.addRGBPoint(Math.max(0, uMin - 0.5), 0, 0, 0);
-  ctf.addRGBPoint(uMin, r, g, b);
-  ctf.addRGBPoint(255, r, g, b);
+  ctf.addRGBPoint(uMin, lift(r, 0.85), lift(g, 0.85), lift(b, 0.85));
+  ctf.addRGBPoint(uMin + span * 0.25, lift(r, 1.05), lift(g, 1.05), lift(b, 1.05));
+  ctf.addRGBPoint(uMax, lift(r, 1.15, 0.1), lift(g, 1.15, 0.1), lift(b, 1.15, 0.1));
+  ctf.addRGBPoint(255, lift(r, 1.2, 0.15), lift(g, 1.2, 0.15), lift(b, 1.2, 0.15));
 
   const otf = vtkPiecewiseFunction.newInstance();
-  // Steeper opacity = less foggy / “filtered” look; closer to Local crispness.
+  // Faster opacity ramp so volumes read brighter while staying glassy
+  const peak = lightMode ? 0.88 : 0.95;
   otf.addPoint(0, 0);
   otf.addPoint(Math.max(0, uMin - 0.5), 0);
   otf.addPoint(uMin, 0);
-  otf.addPoint(uMin + Math.max(1, (uMax - uMin) * 0.05), lightMode ? 0.45 : 0.35);
-  otf.addPoint(uMin + (uMax - uMin) * 0.25, lightMode ? 0.85 : 0.75);
-  otf.addPoint(uMax, 1.0);
-  otf.addPoint(255, 1.0);
+  otf.addPoint(uMin + span * 0.04, 0.12 * opacityScale);
+  otf.addPoint(uMin + span * 0.15, 0.4 * opacityScale);
+  otf.addPoint(uMin + span * 0.4, 0.72 * opacityScale);
+  otf.addPoint(uMax, peak * opacityScale);
+  otf.addPoint(255, Math.min(1, peak * 1.05) * opacityScale);
 
   const prop = vtkVolumeProperty.newInstance();
   prop.setIndependentComponents(false);
   prop.setRGBTransferFunction(0, ctf);
   prop.setScalarOpacity(0, otf);
-  // Smaller unit distance → denser optical depth (more detail, less washed-out).
-  prop.setScalarOpacityUnitDistance(0, Math.max(opacityUnitDistance, 1e-4));
+  // Slightly tighter unit distance → more visible accumulation (brighter)
+  const unit = Math.max(opacityUnitDistance * (0.65 + (1 - opacityScale) * 0.45), 1e-4);
+  prop.setScalarOpacityUnitDistance(0, unit);
   prop.setInterpolationTypeToLinear();
   if (typeof prop.setPreferSizeOverAccuracy === 'function') {
     prop.setPreferSizeOverAccuracy(false);
   }
-  prop.setShade(false);
-  prop.setAmbient(1.0);
-  prop.setDiffuse(0.0);
-  prop.setSpecular(0);
+
+  // High ambient keeps shaded volumes bright; soft specular for shine
+  prop.setShade(true);
+  prop.setAmbient(lightMode ? 0.62 : 0.55);
+  prop.setDiffuse(lightMode ? 0.55 : 0.6);
+  prop.setSpecular(0.45);
+  if (typeof prop.setSpecularPower === 'function') {
+    prop.setSpecularPower(22);
+  }
   return prop;
 }
 

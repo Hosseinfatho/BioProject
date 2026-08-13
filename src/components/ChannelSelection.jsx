@@ -368,7 +368,7 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
 
         // Convert threshold and opacity to numbers
         if (field === 'opacity') {
-          updated[field] = parseFloat(value);
+          updated[field] = Math.max(0, Math.min(1, parseFloat(value)));
         }
 
         // Ensure thresholdMin <= thresholdMax
@@ -1047,6 +1047,40 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
                     </>
                   );
                 })()}
+                {/* Opacity — drives transparent / glass transfer function */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    minWidth: '110px',
+                    flexShrink: 0
+                  }}
+                  title="Channel opacity (transfer function)"
+                >
+                  <span style={{ fontSize: '10px', color: 'var(--text-muted, #aaa)', width: 28 }}>
+                    Op
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={Math.round((channel.opacity ?? 1) * 100)}
+                    onChange={(e) =>
+                      updateChannel(channel.id, 'opacity', parseInt(e.target.value, 10) / 100)
+                    }
+                    style={{
+                      flex: 1,
+                      minWidth: 56,
+                      accentColor: channel.color,
+                      cursor: 'pointer'
+                    }}
+                  />
+                  <span style={{ fontSize: '10px', color: 'var(--text-muted, #aaa)', width: 28 }}>
+                    {Math.round((channel.opacity ?? 1) * 100)}%
+                  </span>
+                </div>
                 <div />
               </div>
 

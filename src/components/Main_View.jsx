@@ -1251,16 +1251,27 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
       const configChanged = entry?.configSignature !== newSignature;
 
       if (entry && configChanged) {
-        vtk.removeChannel(key);
-        loadedChannels.delete(key);
-        channelDataCache.delete(key);
-        mesh = null;
-        cameraFramedRef.current = false;
+        // Threshold / color / opacity → refresh TF only (keep GPU volume).
+        if (vtk.hasChannel(key) && channelDataCache.has(key)) {
+          vtk.updateChannelAppearance(key, channelConfig, {
+            lightMode: theme === 'light'
+          });
+          entry.configSignature = newSignature;
+          needsRender = true;
+        } else {
+          vtk.removeChannel(key);
+          loadedChannels.delete(key);
+          mesh = null;
+        }
       }
       if (vtk.hasChannel(key)) {
         vtk.setChannelVisible(key, channelConfig.visible !== false);
       }
     });
+
+    if (needsRender) {
+      renderScene();
+    }
 
     // Re-balance GPU texture size when visible channel count changes (avoids CONTEXT_LOST).
     const visibleCountNow = Math.max(
@@ -1358,7 +1369,7 @@ const Main_View = forwardRef(({ channels = [], activeRegions = [], onSelectionCh
     };
 
     loadChannels();
-  }, [channels, upsertVtkChannel, renderScene, vtkReady]);
+  }, [channels, upsertVtkChannel, renderScene, vtkReady, theme]);
 
   // Calculate dimensions in micrometers (assuming 1 voxel = 1 μm, adjust as needed)
   const getCuboidDimensions = () => {
