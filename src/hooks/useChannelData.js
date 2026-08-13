@@ -223,9 +223,11 @@ export const loadChannelData = async (channelIndex, options = {}) => {
     const dir = basePath || CONFIG.VISUALIZATION_DATA_DIR;
     const prefix = `${baseUrl}/${dir}`;
     const paths = [
-        { data: `${prefix}/channel_${channelIndex}_napari_data.raw`, metadata: `${prefix}/channel_${channelIndex}_napari_metadata.json` },
+        // Prefer standard names used by Low/High/Very High folders on arcade
+        { data: `${prefix}/channel_${channelIndex}_data.raw`, metadata: `${prefix}/channel_${channelIndex}_metadata.json` },
         { data: `${prefix}/channel_${channelIndex}_data.raw`, metadata: `${prefix}/channel_${channelIndex}_data.json` },
-        { data: `${prefix}/channel_${channelIndex}_data.raw`, metadata: `${prefix}/channel_${channelIndex}_metadata.json` }
+        // Legacy napari export naming (optional)
+        { data: `${prefix}/channel_${channelIndex}_napari_data.raw`, metadata: `${prefix}/channel_${channelIndex}_napari_metadata.json` }
     ];
 
     for (const path of paths) {

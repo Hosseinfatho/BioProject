@@ -165,9 +165,9 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
         const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
         const prefix = `${baseUrl}/${dir}`;
         const paths = [
-          `${prefix}/channel_${channelIndex}_napari_metadata.json`,
+          `${prefix}/channel_${channelIndex}_metadata.json`,
           `${prefix}/channel_${channelIndex}_data.json`,
-          `${prefix}/channel_${channelIndex}_metadata.json`
+          `${prefix}/channel_${channelIndex}_napari_metadata.json`
         ];
 
         for (const path of paths) {
@@ -283,12 +283,13 @@ const ChannelSelection = ({ onChannelsChange, presetChannels = [], presetVersion
       CONFIG.VERY_HIGH_RES_CHANNEL_DIR || 'visualization_data_very_high'
     ].filter((dir) => dir && dir !== channelBasePath);
     const paths = [
-      `${baseUrl}/${channelBasePath}/channel_0_napari_metadata.json`,
-      `${baseUrl}/${channelBasePath}/channel_0_data.json`,
       `${baseUrl}/${channelBasePath}/channel_0_metadata.json`,
+      `${baseUrl}/${channelBasePath}/channel_0_data.json`,
+      `${baseUrl}/${channelBasePath}/channel_0_napari_metadata.json`,
       ...fallbackDirs.flatMap((dir) => [
-        `${baseUrl}/${dir}/channel_0_napari_metadata.json`,
-        `${baseUrl}/${dir}/channel_0_metadata.json`
+        `${baseUrl}/${dir}/channel_0_metadata.json`,
+        `${baseUrl}/${dir}/channel_0_data.json`,
+        `${baseUrl}/${dir}/channel_0_napari_metadata.json`
       ])
     ];
 
