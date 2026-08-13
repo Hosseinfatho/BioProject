@@ -1,7 +1,12 @@
-/** Shared helpers for Example scene capture / restore (named library in localStorage). */
+/** Shared helpers for Example scene capture / restore.
+ * Local browser library (localStorage) + bundled examples (shipped in Docker image).
+ */
+
+import { BUNDLED_EXAMPLES } from './bundledExamples.js';
 
 export const EXAMPLE_STORAGE_KEY = 'congat.exampleScene'; // legacy single snapshot
 export const EXAMPLE_LIBRARY_KEY = 'congat.exampleScenes';
+export const EXAMPLE_HIDDEN_BUILTIN_KEY = 'congat.exampleScenes.hiddenBuiltin';
 
 export function vec3ToPlain(v) {
   if (!v) return null;
@@ -86,6 +91,20 @@ function writeLibrary(list) {
   localStorage.setItem(EXAMPLE_LIBRARY_KEY, JSON.stringify(list));
 }
 
+function readHiddenBuiltinIds() {
+  try {
+    const raw = localStorage.getItem(EXAMPLE_HIDDEN_BUILTIN_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeHiddenBuiltinIds(set) {
+  localStorage.setItem(EXAMPLE_HIDDEN_BUILTIN_KEY, JSON.stringify([...set]));
+}
+
 /** Migrate legacy single-key snapshot into the library once. */
 function migrateLegacyIfNeeded(list) {
   try {
@@ -109,7 +128,8 @@ function migrateLegacyIfNeeded(list) {
           id: parsed.id || `legacy-${Date.now()}`,
           name: parsed.name || 'Legacy example',
           createdAt: parsed.createdAt || new Date().toISOString(),
-          enabled: true
+          enabled: true,
+          builtin: false
         },
         ...list
       ];
@@ -122,10 +142,42 @@ function migrateLegacyIfNeeded(list) {
   return list;
 }
 
-export function listExampleScenes() {
+function normalizeImported(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  if (entry.enabled === false) return null;
+  if (!Array.isArray(entry.channels)) return null;
+  return {
+    ...entry,
+    id: entry.id || `ex-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: (entry.name || 'Imported example').trim() || 'Imported example',
+    createdAt: entry.createdAt || new Date().toISOString(),
+    enabled: true,
+    builtin: false
+  };
+}
+
+/** Browser-local examples only. */
+export function listLocalExampleScenes() {
   return migrateLegacyIfNeeded(readLibraryRaw())
     .filter((ex) => ex && ex.enabled !== false)
-    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    .map((ex) => ({ ...ex, builtin: false }));
+}
+
+/** Bundled + local (local overrides same id). */
+export function listExampleScenes() {
+  const hidden = readHiddenBuiltinIds();
+  const bundled = (BUNDLED_EXAMPLES || [])
+    .filter((ex) => ex && ex.enabled !== false && !hidden.has(ex.id))
+    .map((ex) => ({ ...ex, builtin: true }));
+
+  const local = listLocalExampleScenes();
+  const byId = new Map();
+  bundled.forEach((ex) => byId.set(ex.id, ex));
+  local.forEach((ex) => byId.set(ex.id, { ...ex, builtin: false }));
+
+  return Array.from(byId.values()).sort((a, b) =>
+    String(b.createdAt || '').localeCompare(String(a.createdAt || ''))
+  );
 }
 
 export function saveExampleScene(snapshot) {
@@ -135,9 +187,10 @@ export function saveExampleScene(snapshot) {
     id: snapshot.id || `ex-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name: (snapshot.name || 'Untitled example').trim() || 'Untitled example',
     createdAt: snapshot.createdAt || new Date().toISOString(),
-    enabled: true
+    enabled: true,
+    builtin: false
   };
-  const list = listExampleScenes().filter((ex) => ex.id !== entry.id);
+  const list = listLocalExampleScenes().filter((ex) => ex.id !== entry.id);
   list.unshift(entry);
   writeLibrary(list);
   return entry;
@@ -145,6 +198,15 @@ export function saveExampleScene(snapshot) {
 
 export function deleteExampleScene(id) {
   if (!id) return listExampleScenes();
+
+  // Hide bundled examples locally (cannot delete from image).
+  const bundled = (BUNDLED_EXAMPLES || []).some((ex) => ex?.id === id);
+  if (bundled) {
+    const hidden = readHiddenBuiltinIds();
+    hidden.add(id);
+    writeHiddenBuiltinIds(hidden);
+  }
+
   const next = readLibraryRaw().filter((ex) => ex?.id !== id);
   writeLibrary(next);
   return listExampleScenes();
@@ -152,6 +214,40 @@ export function deleteExampleScene(id) {
 
 export function getExampleScene(id) {
   return listExampleScenes().find((ex) => ex.id === id) || null;
+}
+
+/** Import one snapshot or an array / { examples: [] } from a JSON file. */
+export function importExampleScenesFromJson(payload) {
+  let items = [];
+  if (Array.isArray(payload)) items = payload;
+  else if (Array.isArray(payload?.examples)) items = payload.examples;
+  else if (payload && typeof payload === 'object') items = [payload];
+
+  const imported = [];
+  items.forEach((raw) => {
+    const entry = normalizeImported(raw);
+    if (!entry) return;
+    saveExampleScene(entry);
+    imported.push(entry);
+  });
+  return imported;
+}
+
+export function exportAllExampleScenes() {
+  const list = listExampleScenes();
+  downloadSceneSnapshot(
+    { version: 1, examples: list },
+    `congat-examples-${new Date().toISOString().slice(0, 10)}.json`
+  );
+  return list;
+}
+
+export function exportExampleScene(snapshot) {
+  if (!snapshot) return;
+  const safe = String(snapshot.name || 'example')
+    .replace(/[^\w\-]+/g, '_')
+    .slice(0, 40);
+  downloadSceneSnapshot(snapshot, `${safe || 'example'}.json`);
 }
 
 /** @deprecated Prefer listExampleScenes / saveExampleScene */

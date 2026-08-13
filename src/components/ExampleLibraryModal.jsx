@@ -1,9 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTheme } from '../theme.jsx';
-import { listExampleScenes } from '../presets/scenePreset.js';
+import {
+  listExampleScenes,
+  importExampleScenesFromJson,
+  exportAllExampleScenes,
+  exportExampleScene
+} from '../presets/scenePreset.js';
 
 /**
- * Popup: save current scene with a name, list all examples, load / delete.
+ * Popup: save / load / delete examples.
+ * Also Import/Export JSON so local saves can be used on the Docker server
+ * (localStorage does not sync across localhost vs arcade).
  */
 const ExampleLibraryModal = ({
   open,
@@ -16,6 +23,8 @@ const ExampleLibraryModal = ({
   const [name, setName] = useState('');
   const [examples, setExamples] = useState([]);
   const [busyId, setBusyId] = useState(null);
+  const [status, setStatus] = useState('');
+  const fileInputRef = useRef(null);
 
   const refresh = () => setExamples(listExampleScenes());
 
@@ -24,6 +33,7 @@ const ExampleLibraryModal = ({
     refresh();
     setName('');
     setBusyId(null);
+    setStatus('');
   }, [open]);
 
   if (!open) return null;
@@ -39,6 +49,7 @@ const ExampleLibraryModal = ({
       await onSave?.(trimmed);
       setName('');
       refresh();
+      setStatus('Saved in this browser. Use Export to copy it to the server.');
     } finally {
       setBusyId(null);
     }
@@ -55,10 +66,44 @@ const ExampleLibraryModal = ({
   };
 
   const handleDelete = (ex) => {
-    const ok = window.confirm(`Delete example “${ex.name}”?`);
+    const label = ex.builtin ? `Hide built-in “${ex.name}”?` : `Delete example “${ex.name}”?`;
+    const ok = window.confirm(label);
     if (!ok) return;
     onDelete?.(ex.id);
     refresh();
+  };
+
+  const handleExportAll = () => {
+    const list = exportAllExampleScenes();
+    setStatus(
+      list.length
+        ? `Exported ${list.length} example(s). On the server open Example → Import and choose that file.`
+        : 'Nothing to export.'
+    );
+  };
+
+  const handleImportClick = () => fileInputRef.current?.click();
+
+  const handleImportFile = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setBusyId('import');
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      const imported = importExampleScenesFromJson(json);
+      refresh();
+      setStatus(
+        imported.length
+          ? `Imported ${imported.length} example(s) into this browser.`
+          : 'No valid examples found in that file.'
+      );
+    } catch (err) {
+      window.alert(`Import failed: ${err?.message || err}`);
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const formatWhen = (iso) => {
@@ -68,6 +113,17 @@ const ExampleLibraryModal = ({
     } catch {
       return iso;
     }
+  };
+
+  const btnGhost = {
+    padding: '7px 12px',
+    backgroundColor: 'transparent',
+    color: colors.text || '#fff',
+    border: `1px solid ${colors.borderStrong || '#666'}`,
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontWeight: 700,
+    fontSize: '12px'
   };
 
   return (
@@ -90,7 +146,7 @@ const ExampleLibraryModal = ({
           backgroundColor: 'var(--surface-bg, #1a1a1a)',
           padding: '24px',
           borderRadius: '8px',
-          maxWidth: '520px',
+          maxWidth: '560px',
           width: '92%',
           maxHeight: '80vh',
           overflowY: 'auto',
@@ -124,10 +180,42 @@ const ExampleLibraryModal = ({
         <h2 style={{ color: '#4CAF50', margin: '0 0 8px 0', fontSize: '20px' }}>
           Examples
         </h2>
-        <p style={{ margin: '0 0 18px 0', fontSize: '13px', opacity: 0.8, lineHeight: 1.4 }}>
-          Save the current view (channels, camera, filters, boxes) with a name,
-          or open / delete a saved example.
+        <p style={{ margin: '0 0 14px 0', fontSize: '13px', opacity: 0.8, lineHeight: 1.45 }}>
+          Saves stay in <strong>this browser</strong> only. To use them on the Docker server,
+          Export here → open the server site → Import.
         </p>
+
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+          <button type="button" style={btnGhost} onClick={handleImportClick} disabled={busyId === 'import'}>
+            {busyId === 'import' ? 'Importing…' : 'Import JSON'}
+          </button>
+          <button type="button" style={btnGhost} onClick={handleExportAll}>
+            Export all
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            style={{ display: 'none' }}
+            onChange={handleImportFile}
+          />
+        </div>
+
+        {status ? (
+          <div
+            style={{
+              marginBottom: '14px',
+              padding: '8px 10px',
+              borderRadius: '4px',
+              backgroundColor: 'rgba(76, 175, 80, 0.12)',
+              border: '1px solid rgba(76, 175, 80, 0.35)',
+              fontSize: '12px',
+              lineHeight: 1.4
+            }}
+          >
+            {status}
+          </div>
+        ) : null}
 
         {/* Save current */}
         <div
@@ -186,7 +274,7 @@ const ExampleLibraryModal = ({
 
         {/* List */}
         <div style={{ fontWeight: 700, marginBottom: '10px', fontSize: '14px' }}>
-          Saved examples ({examples.length})
+          Available examples ({examples.length})
         </div>
 
         {examples.length === 0 ? (
@@ -200,7 +288,7 @@ const ExampleLibraryModal = ({
               borderRadius: '6px'
             }}
           >
-            No examples yet. Arrange the view, enter a name above, and press Save.
+            No examples here yet. Save one, or Import a JSON exported from your local browser.
           </div>
         ) : (
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
@@ -210,7 +298,7 @@ const ExampleLibraryModal = ({
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '10px',
+                  gap: '8px',
                   padding: '10px 12px',
                   marginBottom: '8px',
                   border: `1px solid ${colors.border || '#444'}`,
@@ -230,6 +318,11 @@ const ExampleLibraryModal = ({
                     title={ex.name}
                   >
                     {ex.name}
+                    {ex.builtin ? (
+                      <span style={{ marginLeft: 6, fontSize: 10, opacity: 0.7, fontWeight: 600 }}>
+                        (built-in)
+                      </span>
+                    ) : null}
                   </div>
                   <div style={{ fontSize: '11px', opacity: 0.65, marginTop: '2px' }}>
                     {ex.resolution || 'low'}
@@ -257,8 +350,20 @@ const ExampleLibraryModal = ({
                 </button>
                 <button
                   type="button"
+                  onClick={() => exportExampleScene(ex)}
+                  title="Download this example as JSON"
+                  style={{
+                    ...btnGhost,
+                    padding: '6px 8px',
+                    flexShrink: 0
+                  }}
+                >
+                  Export
+                </button>
+                <button
+                  type="button"
                   onClick={() => handleDelete(ex)}
-                  title="Delete this example"
+                  title={ex.builtin ? 'Hide built-in example' : 'Delete this example'}
                   style={{
                     padding: '6px 10px',
                     backgroundColor: 'transparent',
@@ -271,7 +376,7 @@ const ExampleLibraryModal = ({
                     flexShrink: 0
                   }}
                 >
-                  Delete
+                  {ex.builtin ? 'Hide' : 'Delete'}
                 </button>
               </li>
             ))}
