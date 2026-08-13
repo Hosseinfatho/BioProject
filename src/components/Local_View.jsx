@@ -3,8 +3,7 @@ import { loadChannelData } from '../hooks/useChannelData';
 import { useTheme } from '../theme.jsx';
 import { CONFIG } from '../config';
 import {
-  createLocalVtkView,
-  estimateActiveVoxels
+  createLocalVtkView
 } from '../vtk/localVtkVolumeView';
 
 /** Local View always prefers Very High volumes when available. */
@@ -217,34 +216,38 @@ const LocalViewContent = ({ selectedRegionData, channels = [], onCloseTab, regio
         console.warn('Local_View VTK: no cropBounds — cannot load selection crop');
       }
 
-      const channelVolumes = [];
-      let totalActive = 0;
-
-      for (const channelConfig of visibleChannels) {
-        if (gen !== loadGenRef.current) return;
-        const channelData = await loadLocalViewChannelData(channelConfig, cropBounds);
-        if (!channelData) {
-          console.warn(`Local_View VTK: Failed to load channel ${channelConfig.channelIndex}`);
-          continue;
-        }
-
-        const shape = channelData.metadata.shape.map(Number);
-        totalActive += estimateActiveVoxels(
-          channelData.data,
-          shape,
-          channelConfig,
-          channelData.metadata
-        );
-
-        channelVolumes.push({
-          data: channelData.data,
-          shape,
-          channelConfig,
-          metadata: channelData.metadata
-        });
-      }
+      // Parallel channel loads (Range crop) — biggest win for Local load time
+      const loadedList = new Array(visibleChannels.length);
+      let nextIdx = 0;
+      const CHANNEL_CONCURRENCY = Math.min(3, visibleChannels.length);
+      await Promise.all(
+        Array.from({ length: CHANNEL_CONCURRENCY }, async () => {
+          while (nextIdx < visibleChannels.length) {
+            if (gen !== loadGenRef.current) return;
+            const i = nextIdx++;
+            const channelConfig = visibleChannels[i];
+            const channelData = await loadLocalViewChannelData(channelConfig, cropBounds);
+            if (!channelData) {
+              console.warn(`Local_View VTK: Failed to load channel ${channelConfig.channelIndex}`);
+              loadedList[i] = null;
+              continue;
+            }
+            const shape = channelData.metadata.shape.map(Number);
+            loadedList[i] = {
+              data: channelData.data,
+              shape,
+              channelConfig,
+              metadata: channelData.metadata,
+              approxVoxels: shape[0] * shape[1] * shape[2]
+            };
+          }
+        })
+      );
 
       if (gen !== loadGenRef.current) return;
+
+      const channelVolumes = loadedList.filter(Boolean);
+      const totalActive = channelVolumes.reduce((sum, cv) => sum + (cv.approxVoxels || 0), 0);
 
       if (channelVolumes.length === 0) {
         vtkView.clearVolumes();
@@ -253,8 +256,11 @@ const LocalViewContent = ({ selectedRegionData, channels = [], onCloseTab, regio
         return;
       }
 
+      // Native crop quality: no extra GPU downsample beyond the crop itself
       vtkView.setChannelVolumes(channelVolumes, {
-        lightMode: themeRef.current === 'light'
+        lightMode: themeRef.current === 'light',
+        quality: 'fast',
+        maxVoxels: Number.POSITIVE_INFINITY
       });
       setCellCount(totalActive);
       console.log(

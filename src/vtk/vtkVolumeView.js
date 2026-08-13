@@ -554,13 +554,21 @@ export function createVtkVolumeView(container, options = {}) {
     const sp = imageData.getSpacing();
     const voxelStep = Math.min(sp[0], sp[1], sp[2]) || 0.01;
     // Slightly coarser still-quality → snappier orbit; LOD coarsens further while dragging.
-    const quality = opts.quality === 'high' ? 0.45 : opts.quality === 'medium' ? 0.65 : 0.85;
+    // quality: high | medium | fast (Local View uses fast)
+    const qualityScale =
+      opts.quality === 'high' ? 0.45 :
+      opts.quality === 'medium' ? 0.65 :
+      opts.quality === 'fast' ? 1.15 :
+      0.85;
     let sd = worldSpace
-      ? Math.max(voxelStep * quality, 0.0002)
-      : Math.min(sampleDistance, Math.max(voxelStep * quality, 0.05));
+      ? Math.max(voxelStep * qualityScale, 0.0002)
+      : Math.min(sampleDistance, Math.max(voxelStep * qualityScale, 0.05));
     const extentDiag = Math.hypot(sp[0] * dims[0], sp[1] * dims[1], sp[2] * dims[2]);
     // Ray-sample cap: agility first (VRAM is rarely the browser bottleneck).
-    const maxSamples = opts.quality === 'high' ? 6000 : 4000;
+    const maxSamples =
+      opts.quality === 'high' ? 6000 :
+      opts.quality === 'fast' ? 2200 :
+      4000;
     const minSdForBudget = extentDiag / Math.max(1, maxSamples - 64);
     if (sd < minSdForBudget) sd = minSdForBudget;
     mapper.setSampleDistance(sd);
@@ -571,13 +579,17 @@ export function createVtkVolumeView(container, options = {}) {
       mapper.setAutoAdjustSampleDistances(true);
     }
     if (typeof mapper.setImageSampleDistance === 'function') {
-      mapper.setImageSampleDistance(opts.quality === 'high' ? 1.5 : 2.25);
+      mapper.setImageSampleDistance(
+        opts.quality === 'high' ? 1.5 :
+        opts.quality === 'fast' ? 2.75 :
+        2.25
+      );
     }
     if (typeof mapper.setMinimumImageSampleDistance === 'function') {
       mapper.setMinimumImageSampleDistance(1);
     }
     if (typeof mapper.setMaximumImageSampleDistance === 'function') {
-      mapper.setMaximumImageSampleDistance(10);
+      mapper.setMaximumImageSampleDistance(opts.quality === 'fast' ? 12 : 10);
     }
     mapper.setBlendModeToComposite();
 
@@ -591,6 +603,10 @@ export function createVtkVolumeView(container, options = {}) {
       Boolean(opts.lightMode),
       voxelStep * (opts.quality === 'high' ? 0.75 : 1.0)
     );
+    // Local "fast" path skips per-sample shading for much snappier orbit
+    if (opts.quality === 'fast' && typeof prop.setShade === 'function') {
+      prop.setShade(false);
+    }
     volume.setProperty(prop);
 
     const visible = channelConfig.visible !== false;
@@ -607,6 +623,7 @@ export function createVtkVolumeView(container, options = {}) {
       channelConfig: { ...channelConfig },
       metadata: channelData.metadata,
       opacityUnitDistance: voxelStep * (opts.quality === 'high' ? 0.75 : 1.0),
+      quality: opts.quality || null,
       configSignature: null
     });
 
@@ -630,6 +647,9 @@ export function createVtkVolumeView(container, options = {}) {
       Boolean(opts.lightMode),
       opts.opacityUnitDistance != null ? opts.opacityUnitDistance : (bundle.opacityUnitDistance || 1)
     );
+    if ((opts.quality || bundle.quality) === 'fast' && typeof nextProp.setShade === 'function') {
+      nextProp.setShade(false);
+    }
     try {
       bundle.prop?.delete?.();
     } catch (_) { /* */ }
@@ -805,12 +825,15 @@ export function createVtkVolumeView(container, options = {}) {
   };
 }
 
+/** Soft GPU budget for Local crops (snappy orbit; still looks detailed in a ROI). */
+const LOCAL_MAX_VOXELS = 10_000_000;
+
 /** Back-compat alias used by Local_View. */
 export function createLocalVtkView(container) {
   return createVtkVolumeView(container, {
     interactive: true,
-    maxVoxels: DEFAULT_MAX_VOXELS,
-    sampleDistance: 0.5,
+    maxVoxels: LOCAL_MAX_VOXELS,
+    sampleDistance: 0.9,
     worldSpace: false
   });
 }
