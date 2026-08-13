@@ -61,7 +61,16 @@ npm start
 
 Public URL: **https://arcade.evl.uic.edu/congat** (container listens on host port **9595**).
 
-1. Make sure SSH works: `ssh arcade.evl.uic.edu`
+1. Make sure SSH works: `ssh hossein@arcade.evl.uic.edu`  -> cd data  -> cd hossein --> cd congat
+git pull
+
+
+docker compose down
+docker compose up -d --build
+docker compose ps
+docker compose logs -f --tail=80
+
+
 2. From the project root, deploy (syncs code + channel data, then builds on the server):
 
 ```powershell
