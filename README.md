@@ -22,7 +22,7 @@ The dashboard provides an interactive 3D visualization and analysis platform for
 
 ### Live Demo
 
-🌐 **Online Version**: [https://hosseinfatho.github.io/BioProject/](https://hosseinfatho.github.io/BioProject/)
+🌐 **Online Version**: [https://hosseinfatho.github.io/BioProject/](https://arcade.evl.uic.edu/congat/)
 
 ## Technology Stack
 
