@@ -1,3 +1,5 @@
+## ConGAT: Context-aware graph attention network for 3D region of interest discovery in multiplexed microscopy images☆
+
 # Melanoma Tissue Volumes
 
 **Team Members:**
@@ -22,7 +24,7 @@ The dashboard provides an interactive 3D visualization and analysis platform for
 
 ### Live Demo
 
-🌐 **Online Version**: [https://hosseinfatho.github.io/BioProject/](https://hosseinfatho.github.io/BioProject/)
+🌐 **Online Version**: [https://hosseinfatho.github.io/BioProject/](https://arcade.evl.uic.edu/congat/)
 
 ## Technology Stack
 
