@@ -20,8 +20,8 @@ const MOVE_SPEED = 0.05;
 const FAST_MOVE_SPEED = 0.15;
 const LOD_COOLDOWN_MS = 200;
 /** Soft total GPU budget for ALL Main volume textures combined (prevents CONTEXT_LOST). */
-const MAIN_VTK_TOTAL_VOXEL_BUDGET = 220_000_000;
-const MAIN_VTK_MIN_VOXELS_PER_CHANNEL = 10_000_000;
+const MAIN_VTK_TOTAL_VOXEL_BUDGET = 120_000_000;
+const MAIN_VTK_MIN_VOXELS_PER_CHANNEL = 5_000_000;
 
 const getMainVtkMaxVoxels = (channelCount) => {
   const n = Math.max(1, Number(channelCount) || 1);

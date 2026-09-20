@@ -826,7 +826,7 @@ export function createVtkVolumeView(container, options = {}) {
 }
 
 /** Soft GPU budget for Local crops (snappy orbit; still looks detailed in a ROI). */
-const LOCAL_MAX_VOXELS = 10_000_000;
+const LOCAL_MAX_VOXELS = 16_000_000;
 
 /** Back-compat alias used by Local_View. */
 export function createLocalVtkView(container) {

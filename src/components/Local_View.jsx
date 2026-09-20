@@ -6,9 +6,9 @@ import {
   createLocalVtkView
 } from '../vtk/localVtkVolumeView';
 
-/** Local View always prefers Very High volumes when available. */
+/** Local View uses High-res (faster than Very High ~2.9GB). */
 const LOCAL_VIEW_DATA_DIR =
-  CONFIG.VERY_HIGH_RES_CHANNEL_DIR || 'visualization_data_very_high';
+  CONFIG.VISUALIZATION_DATA_DIR || 'visualization_data';
 
 const toPlainVec = (v) => {
   if (!v) return null;
@@ -111,44 +111,41 @@ const fetchVeryHighMetadata = async (channelIndex) => {
   return null;
 };
 
-/** Load channel for Local View: Very High crop at native density. */
+/** Native crop resolution for Local (highest quality). */
+const LOCAL_LOAD_STRIDES = { strideZ: 1, strideY: 1, strideX: 1 };
+
+/** Load channel for Local View: full-res crop (no full-file stream). */
 const loadLocalViewChannelData = async (channelConfig, cropBounds) => {
   const index = channelConfig.channelIndex;
-  const fallback = channelConfig.channelBasePath || CONFIG.VISUALIZATION_DATA_DIR;
+  const dirs = [
+    LOCAL_VIEW_DATA_DIR,
+    CONFIG.LOW_RES_CHANNEL_DIR,
+    CONFIG.VERY_HIGH_RES_CHANNEL_DIR,
+    channelConfig.channelBasePath
+  ].filter(Boolean);
+  const uniqueDirs = [...new Set(dirs)];
 
-  if (cropBounds) {
+  for (const basePath of uniqueDirs) {
     try {
       const cropped = await loadChannelData(index, {
-        basePath: LOCAL_VIEW_DATA_DIR,
-        strides: { strideZ: 1, strideY: 1, strideX: 1 },
-        cropBounds,
-        cacheSuffix: 'local-crop'
+        basePath,
+        strides: LOCAL_LOAD_STRIDES,
+        cropBounds: cropBounds || undefined,
+        cacheSuffix: cropBounds ? 'local-crop-1' : 'local-1',
+        allowFullStream: false
       });
       if (cropped) {
         console.log(
-          `Local_View: channel ${index} cropped NATIVE from ${LOCAL_VIEW_DATA_DIR} ` +
+          `Local_View: channel ${index} FULL-RES (1×1×1) from ${basePath} ` +
           `shape=${cropped.metadata.shape?.join('×')}`
         );
         return cropped;
       }
     } catch (err) {
-      console.warn(`Local_View: cropped native load failed for channel ${index}:`, err);
+      console.warn(`Local_View: load failed for channel ${index} in ${basePath}:`, err);
     }
   }
-
-  let data = await loadChannelData(index, { basePath: LOCAL_VIEW_DATA_DIR });
-  if (data) {
-    console.log(`Local_View: channel ${index} loaded (2×2) from ${LOCAL_VIEW_DATA_DIR}`);
-    return data;
-  }
-
-  if (fallback && fallback !== LOCAL_VIEW_DATA_DIR) {
-    console.warn(
-      `Local_View: Very High missing for channel ${index}; falling back to ${fallback}`
-    );
-    data = await loadChannelData(index, { basePath: fallback });
-  }
-  return data;
+  return null;
 };
 
 // Component for rendering a single local view (VTK multi-volume)
@@ -216,10 +213,18 @@ const LocalViewContent = ({ selectedRegionData, channels = [], onCloseTab, regio
         console.warn('Local_View VTK: no cropBounds — cannot load selection crop');
       }
 
-      // Parallel channel loads (Range crop) — biggest win for Local load time
-      const loadedList = new Array(visibleChannels.length);
+      // Progressive: show each channel as soon as it loads (faster perceived Local)
+      vtkView.clearVolumes();
+      let loadedCount = 0;
+      let totalActive = 0;
       let nextIdx = 0;
-      const CHANNEL_CONCURRENCY = Math.min(3, visibleChannels.length);
+      const CHANNEL_CONCURRENCY = Math.min(2, visibleChannels.length);
+      const upsertOpts = {
+        lightMode: themeRef.current === 'light',
+        quality: 'medium',
+        maxVoxels: 16_000_000
+      };
+
       await Promise.all(
         Array.from({ length: CHANNEL_CONCURRENCY }, async () => {
           while (nextIdx < visibleChannels.length) {
@@ -227,44 +232,41 @@ const LocalViewContent = ({ selectedRegionData, channels = [], onCloseTab, regio
             const i = nextIdx++;
             const channelConfig = visibleChannels[i];
             const channelData = await loadLocalViewChannelData(channelConfig, cropBounds);
-            if (!channelData) {
-              console.warn(`Local_View VTK: Failed to load channel ${channelConfig.channelIndex}`);
-              loadedList[i] = null;
-              continue;
-            }
+            if (!channelData || gen !== loadGenRef.current) continue;
+
             const shape = channelData.metadata.shape.map(Number);
-            loadedList[i] = {
-              data: channelData.data,
-              shape,
+            const key = String(channelConfig.channelIndex ?? i);
+            const ok = vtkView.upsertChannel(
+              key,
+              { data: channelData.data, metadata: channelData.metadata },
               channelConfig,
-              metadata: channelData.metadata,
-              approxVoxels: shape[0] * shape[1] * shape[2]
-            };
+              upsertOpts
+            );
+            if (!ok) continue;
+            loadedCount += 1;
+            totalActive += shape[0] * shape[1] * shape[2];
+            setCellCount(totalActive);
+            if (loadedCount === 1) {
+              vtkView.resetCamera?.();
+              setLoading(false);
+            } else {
+              vtkView.render?.();
+            }
           }
         })
       );
 
       if (gen !== loadGenRef.current) return;
 
-      const channelVolumes = loadedList.filter(Boolean);
-      const totalActive = channelVolumes.reduce((sum, cv) => sum + (cv.approxVoxels || 0), 0);
-
-      if (channelVolumes.length === 0) {
+      if (loadedCount === 0) {
         vtkView.clearVolumes();
         setCellCount(0);
         setLoadError('No channel volume data available');
         return;
       }
 
-      // Native crop quality: no extra GPU downsample beyond the crop itself
-      vtkView.setChannelVolumes(channelVolumes, {
-        lightMode: themeRef.current === 'light',
-        quality: 'fast',
-        maxVoxels: Number.POSITIVE_INFINITY
-      });
-      setCellCount(totalActive);
       console.log(
-        `Local_View VTK: ${channelVolumes.length} volume(s) via multi-volume ray casting`
+        `Local_View VTK: ${loadedCount} volume(s) via multi-volume ray casting`
       );
     } catch (err) {
       console.error('Local_View VTK: visualization failed', err);

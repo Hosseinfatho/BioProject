@@ -199,8 +199,9 @@ async function readVolumeFromResponse(response, shape, strides, cropBounds = nul
 }
 
 /**
- * Fast crop via HTTP Range: download only Z-slab × Y-band bytes (not the whole VH file).
- * Falls back to null if server does not support 206 Partial Content.
+ * Fast crop via HTTP Range.
+ * - Prefer one GET per Z plane (Y-band, X-cropped span) for few round-trips
+ * - Subsample with strides in memory
  */
 async function readVolumeCropWithHttpRanges(url, shape, strides, cropBounds) {
     if (!cropBounds?.min || !cropBounds?.max) return null;
@@ -225,75 +226,71 @@ async function readVolumeCropWithHttpRanges(url, shape, strides, cropBounds) {
     const outY = Math.floor((y1 - y0) / strideY) + 1;
     const outX = Math.floor((x1 - x0) / strideX) + 1;
     const out = new Uint8Array(outZ * outY * outX);
-    const rowWidth = x1 - x0 + 1;
-    const bandRows = y1 - y0 + 1;
-    const bandBytes = bandRows * xSize;
+    const rowBytes = x1 - x0 + 1;
 
-    // Probe Range support with the first needed Z plane's Y-band
-    const probeZ = z0;
-    const probeStart = probeZ * planeSize + y0 * xSize;
-    const probeEnd = probeStart + bandBytes - 1;
+    // Contiguous span covering rows y0..y1 starting at x0 and ending at x1
+    const slabBytes = (y1 - y0) * xSize + rowBytes;
+
+    const zList = [];
+    for (let z = z0; z <= z1; z += strideZ) zList.push(z);
+
+    const probeZ = zList[0];
+    const probeStart = probeZ * planeSize + y0 * xSize + x0;
+    const probeEnd = probeStart + slabBytes - 1;
     const probeRes = await fetch(url, {
         headers: { Range: `bytes=${probeStart}-${probeEnd}` }
     });
     if (probeRes.status !== 206) {
-        console.warn(`loadChannelData: Range not supported for ${url} (HTTP ${probeRes.status}); falling back to stream`);
+        console.warn(`loadChannelData: Range not supported for ${url} (HTTP ${probeRes.status})`);
+        return null;
+    }
+    const probeBuf = new Uint8Array(await probeRes.arrayBuffer());
+    if (probeBuf.length < slabBytes) {
+        console.warn('loadChannelData: Range probe short');
         return null;
     }
 
-    const fillFromBand = (band, outZi) => {
-        let oi = outZi * outY * outX;
+    const fillFromSlab = (slab, outZi) => {
         for (let y = y0; y <= y1; y += strideY) {
-            const localY = y - y0;
-            const rowOff = localY * xSize;
+            const outYi = Math.floor((y - y0) / strideY);
+            const rowOff = (y - y0) * xSize; // relative to slab start at (y0,x0)
+            let oi = (outZi * outY + outYi) * outX;
             for (let x = x0; x <= x1; x += strideX) {
-                out[oi++] = band[rowOff + x];
+                out[oi++] = slab[rowOff + (x - x0)];
             }
         }
     };
 
-    const probeBuf = new Uint8Array(await probeRes.arrayBuffer());
-    if (probeBuf.length < bandBytes) {
-        console.warn('loadChannelData: Range probe returned short body; falling back to stream');
-        return null;
-    }
-    fillFromBand(probeBuf, 0);
+    fillFromSlab(probeBuf, 0);
+    let downloaded = slabBytes;
 
-    const zList = [];
-    for (let z = z0 + strideZ; z <= z1; z += strideZ) zList.push(z);
-
-    const CONCURRENCY = 8;
+    const rest = zList.slice(1);
+    const CONCURRENCY = 6;
     let cursor = 0;
-    const workers = Array.from({ length: Math.min(CONCURRENCY, zList.length) }, async () => {
-        while (cursor < zList.length) {
+    const workers = Array.from({ length: Math.min(CONCURRENCY, rest.length) }, async () => {
+        while (cursor < rest.length) {
             const i = cursor++;
-            const z = zList[i];
-            const start = z * planeSize + y0 * xSize;
-            const end = start + bandBytes - 1;
+            const z = rest[i];
+            const start = z * planeSize + y0 * xSize + x0;
+            const end = start + slabBytes - 1;
             const res = await fetch(url, { headers: { Range: `bytes=${start}-${end}` } });
-            if (res.status !== 206) {
-                throw new Error(`Range fetch failed HTTP ${res.status}`);
-            }
+            if (res.status !== 206) throw new Error(`Range HTTP ${res.status}`);
             const buf = new Uint8Array(await res.arrayBuffer());
-            if (buf.length < bandBytes) {
-                throw new Error('Range body shorter than Y-band');
-            }
-            const outZi = Math.floor((z - z0) / strideZ);
-            fillFromBand(buf, outZi);
+            if (buf.length < slabBytes) throw new Error('Range slab short');
+            downloaded += slabBytes;
+            fillFromSlab(buf, Math.floor((z - z0) / strideZ));
         }
     });
 
     try {
         await Promise.all(workers);
     } catch (err) {
-        console.warn('loadChannelData: Range crop failed, will stream instead:', err);
+        console.warn('loadChannelData: Range crop failed:', err);
         return null;
     }
 
-    const downloaded = (1 + zList.length) * bandBytes;
     console.log(
-        `loadChannelData: Range crop ${outZ}×${outY}×${outX} from ${url} ` +
-        `(~${(downloaded / 1e6).toFixed(1)} MB vs full file; rowWidth=${rowWidth})`
+        `loadChannelData: Range crop ${outZ}×${outY}×${outX} (~${(downloaded / 1e6).toFixed(2)} MB, ${zList.length} Z-GETs)`
     );
 
     return {
@@ -380,6 +377,12 @@ export const loadChannelData = async (channelIndex, options = {}) => {
             }
 
             if (!loaded) {
+                if (options.allowFullStream === false) {
+                    console.warn(
+                        `loadChannelData: Range crop failed and full stream disabled for ${path.data}`
+                    );
+                    continue;
+                }
                 const dataResponse = await fetch(path.data);
                 if (!dataResponse.ok) {
                     console.warn(`loadChannelData: HTTP ${dataResponse.status} for ${path.data}`);
